@@ -1,6 +1,7 @@
 import React from "react";
 import { View, Text, Button, StyleSheet, ScrollView } from "react-native";
 import { stringToColor } from "../utils/stringToColor";
+import Markdown from "react-native-markdown-display";
 
 export default function NoteViewer({ note, onEdit, onBack, isDark }) {
     if (!note) return null;
@@ -12,7 +13,9 @@ export default function NoteViewer({ note, onEdit, onBack, isDark }) {
             <Text style={styles.title}>Note Details</Text>
 
             <ScrollView style={styles.content}>
-                <Text style={styles.noteText}>{note.content?.text || note.text}</Text>
+                <Markdown style={{ body: styles.noteText }}>
+                    {note.content?.text || note.text}
+                </Markdown>
                 {note.tags?.length > 0 && (
                     <View style={styles.tags}>
                         <Text style={styles.tagsLabel}>Tags:</Text>

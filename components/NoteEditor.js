@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { View, TextInput, Button, StyleSheet, Text, Switch } from "react-native";
+import { View, TextInput, Button, StyleSheet, Text, Switch, Platform, Pressable } from "react-native";
 import TagSuggestions from "./TagSuggestions";
 import Markdown from "react-native-markdown-display";
 import { useColorScheme } from "react-native";
@@ -26,6 +26,27 @@ export default function NoteEditor({
   const scheme = useColorScheme();
   const isDark = scheme === "dark";
   const [preview, setPreview] = useState(false);
+  const [selection, setSelection] = useState({ start: 0, end: 0 });
+
+  const applyFormatting = (symbol) => {
+    const start = selection.start;
+    const end = selection.end;
+    const selectedText = noteContent.slice(start, end);
+
+    const newText =
+      noteContent.slice(0, start) +
+      symbol + selectedText + symbol +
+      noteContent.slice(end);
+
+    setNoteContent(newText);
+
+    // Update selection to sit after inserted symbols
+    const offset = symbol.length;
+    setSelection({
+      start: start + offset,
+      end: end + selectedText.length + offset,
+    });
+  };
 
   const hasChanges =
     !editingId ||
@@ -55,8 +76,27 @@ export default function NoteEditor({
         value={noteTitle}
         onChangeText={setNoteTitle}
         editable={!disabled}
-        selectTextOnFocus={!disabled}
+        selectTextOnFocus={disabled}
       />
+      <View style={{ flexDirection: "row", marginBottom: 10 }}>
+        <Button title="B" onPress={() => applyFormatting("**")} />
+        <Button title="I" onPress={() => applyFormatting("_")} />
+        <Button title="S" onPress={() => applyFormatting("~~")} />
+        <Button title="•" onPress={() => {
+          const prefix = "- ";
+          const start = selection.start;
+          const newText =
+            noteContent.slice(0, start) +
+            prefix +
+            noteContent.slice(start);
+
+          setNoteContent(newText);
+          setSelection({
+            start: start + prefix.length,
+            end: start + prefix.length,
+          });
+        }} />
+      </View>
       <TextInput
         style={styles.input(isDark)}
         placeholder="Write a note..."
@@ -64,7 +104,10 @@ export default function NoteEditor({
         onChangeText={setNoteContent}
         multiline
         editable={!disabled}
-        selectTextOnFocus={!disabled}
+        numberOfLines={12}
+        textAlignVertical="top"
+        selectTextOnFocus={disabled}
+        onSelectionChange={(e) => setSelection(e.nativeEvent.selection)}
       />
       <TextInput
         style={styles.input(isDark)}
@@ -72,9 +115,42 @@ export default function NoteEditor({
         value={tags}
         onChangeText={setTags}
         editable={!disabled}
-        selectTextOnFocus={!disabled}
+        selectTextOnFocus={disabled}
       />
-
+      <View style={{ flexDirection: "row", flexWrap: "wrap", marginBottom: 10 }}>
+        {tags
+          .split(",")
+          .map((tag) => tag.trim())
+          .filter(Boolean)
+          .map((tag) => (
+            <View key={tag} style={{
+              flexDirection: "row",
+              alignItems: "center",
+              backgroundColor: isDark ? "#444" : "#ddd",
+              paddingHorizontal: 8,
+              paddingVertical: 4,
+              borderRadius: 12,
+              marginRight: 6,
+              marginBottom: 6,
+            }}>
+              <Text style={{ color: isDark ? "#eee" : "#333", marginRight: 6 }}>
+                {tag}
+              </Text>
+              <Pressable onPress={() => {
+                const updatedTags = tags
+                  .split(",")
+                  .map(t => t.trim())
+                  .filter(t => t && t !== tag)
+                  .join(", ");
+                setTags(updatedTags);
+              }}>
+                <Text style={{ color: isDark ? "#aaa" : "#555", fontWeight: "bold" }}>
+                  ×
+                </Text>
+              </Pressable>
+            </View>
+          ))}
+      </View>
       <TagSuggestions input={tags} setInput={setTags} allTags={allTags} />
       <View style={styles.buttonRow}>
         <Button

@@ -14,6 +14,12 @@ import Markdown from "react-native-markdown-display";
 import NoteEditor from "./NoteEditor"; // Assuming NoteEditor is imported
 import { stringToColor } from "../utils/stringToColor";
 
+const stripMarkdownLists = (text) => {
+  return text
+    .replace(/(^|\n)(\s*[-*+] .*)+/g, '') // unordered lists
+    .replace(/(^|\n)(\s*\d+\.\s+.*)+/g, ''); // ordered lists
+};
+
 export default function NoteList({
   notes,
   editingId,
@@ -97,6 +103,8 @@ export default function NoteList({
     actionButtons: {
       flexDirection: "row",
       gap: 8,
+      backgroundColor: "#f00",
+      color: "#fff"
     },
     timestamp: {
       fontSize: 11,
@@ -199,9 +207,9 @@ export default function NoteList({
               {item.username === "All" && <Text style={styles.sharedLabel}>🌐 Shared</Text>}
               <Text style={styles.noteTitle}>{item.title}</Text>
               {item.content?.text && (
-                <Text style={styles.preview}>
-                  {item.content.text.split(" ").slice(0, 5).join(" ")}...
-                </Text>
+                <Markdown style={{ body: styles.preview }}>
+                  {stripMarkdownLists(item.content.text.split(" ").slice(0, 40).join(" ") + "...")}
+                </Markdown>
               )}
               <Text style={styles.timestamp}>
                 {new Date(item.updatedAt).toLocaleString("en-US", {
@@ -238,7 +246,17 @@ export default function NoteList({
 
         {!isEditing && (
           <View style={styles.actionButtons}>
-            <Button title="Delete" onPress={() => deleteNote(item.id)} />
+            <Pressable
+              onPress={() => deleteNote(item.id)}
+              style={{
+                backgroundColor: "#cc3333",
+                paddingVertical: 6,
+                paddingHorizontal: 12,
+                borderRadius: 6,
+              }}
+            >
+              <Text style={{ color: "#fff", fontWeight: "bold" }}>X</Text>
+            </Pressable>
           </View>
         )}
       </View>
