@@ -1,5 +1,7 @@
-import { useRef } from "react";
+import { useRef, useEffect, useState } from "react";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import NetInfo from "@react-native-community/netinfo";
+import { AppState } from "react-native";
 
 const SYNC_INTERVAL_MS = 30 * 1000;
 const REMOTE_URL = "http://192.168.68.50:4000/notes"; // use your LAN IP on mobile
@@ -9,6 +11,15 @@ export function useNoteSync(notes, setNotes) {
   const isMergingRef = useRef(false); // prevent onChange-triggered loops
   const mergeTimeoutRef = useRef(null); // debounce timer
   const skipEffectRef = useRef(false); // prevent triggering onChange during syncing merges
+  const [lastSyncedAt, setLastSyncedAt] = useState(null); // New state for last sync time
+
+  useEffect(() => {
+    AsyncStorage.getItem("lastSyncAt").then((stored) => {
+      if (stored) {
+        setLastSyncedAt(Number(stored)); // Restore last sync time from storage
+      }
+    });
+  }, []);
 
   const syncNotes = async (force = false, overrideNotes = null) => {
     try {
@@ -55,6 +66,7 @@ export function useNoteSync(notes, setNotes) {
       skipEffectRef.current = true; // Set to true during syncing
       setNotes(mergedNotes);
       lastSyncRef.current = now;
+      setLastSyncedAt(now); // Update lastSyncedAt after successful sync
       await AsyncStorage.setItem("lastSyncAt", now.toString());
       isMergingRef.current = false;
       skipEffectRef.current = false; // Reset after syncing
@@ -80,5 +92,28 @@ export function useNoteSync(notes, setNotes) {
     }
   };
 
-  return { syncNotes, skipEffectRef }; // Export skipEffectRef
+  useEffect(() => {
+    const unsubscribeNet = NetInfo.addEventListener(state => {
+      if (state.isConnected) {
+        console.log("📶 Network reconnected — syncing notes...");
+        syncNotes(true);
+      }
+    });
+
+    const handleAppStateChange = (state) => {
+      if (state === "active") {
+        console.log("📲 App resumed — syncing notes...");
+        syncNotes(true);
+      }
+    };
+
+    const appStateSub = AppState.addEventListener("change", handleAppStateChange);
+
+    return () => {
+      unsubscribeNet();
+      appStateSub.remove();
+    };
+  }, []);
+
+  return { syncNotes, skipEffectRef, lastSyncedAt }; // Export lastSyncedAt
 }

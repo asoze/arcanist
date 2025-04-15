@@ -1,7 +1,8 @@
 import React from "react";
 import { View, Text, TouchableOpacity, StyleSheet } from "react-native";
+import { tagStyles } from "../styles/tagStyles";
 
-export default function TagSuggestions({ input, setInput, allTags }) {
+export default function TagSuggestions({ input = "", setInput, allTags }) {
   const current = input.split(",").pop()?.trim().toLowerCase() || "";
   const suggestions =
     current.length > 0
@@ -31,7 +32,7 @@ export default function TagSuggestions({ input, setInput, allTags }) {
           }}
           style={styles.suggestionTouchable}
         >
-          <Text style={styles.suggestion}>{tag}</Text>
+          <Text style={tagStyles.tag}>{tag}</Text>
         </TouchableOpacity>
       ))}
     </View>
@@ -48,12 +49,5 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     marginRight: 6,
     marginBottom: 6,
-  },
-  suggestion: {
-    backgroundColor: "#ddd",
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 12,
-    fontSize: 12,
   },
 });

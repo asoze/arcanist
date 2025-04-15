@@ -10,7 +10,7 @@ export default function NoteViewer({ note, onEdit, onBack, isDark }) {
 
     return (
         <View style={styles.container}>
-            <Text style={styles.title}>Note Details</Text>
+            <Text style={styles.title}>{note.title || "Untitled Note"}</Text>
 
             <ScrollView style={styles.content}>
                 <Markdown style={{ body: styles.noteText }}>

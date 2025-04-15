@@ -1,9 +1,11 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
-import { View, Text, StyleSheet, Button, useColorScheme } from "react-native";
+import { View, Text, StyleSheet, Button, useColorScheme, Modal, TextInput } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import NoteList from "../components/NoteList";
 import NoteEditor from "../components/NoteEditor"; // Import NoteEditor
 import NoteViewer from "../components/NoteViewer"; // Import NoteViewer
+import ListEditor from "../components/ListEditor";
+import ListViewer from "../components/ListViewer";
 import { useNoteSync } from "../hooks/useNoteSync";
 import usePersistedNotes from "../hooks/usePersistedNotes";
 
@@ -20,7 +22,7 @@ export default function NoteApp() {
   const { notes, setNotes, loading, error } = usePersistedNotes('notes', []);
 
   // Now initialize the sync hook using the persisted notes values
-  const { syncNotes, skipEffectRef } = useNoteSync(notes, setNotes);
+  const { syncNotes, skipEffectRef, lastSyncedAt } = useNoteSync(notes, setNotes);
 
   // Define a debounced sync function
   const debouncedSync = useCallback((notesToSync) => {
@@ -92,12 +94,24 @@ export default function NoteApp() {
     setIsAdding(true); // Set to true when editing
   };
 
-  const startAddNote = () => {
+  const startAddNote = (type = "note") => {
     setViewingId(null);
     setEditingId(null);
     setEditTitle("");
     setEditContent("");
     setEditTags("");
+    const newNote = {
+      id: Date.now().toString(),
+      title: "",
+      content: type === "note" ? { text: "" } : undefined,
+      tags: [],
+      items: type === "list" ? [] : undefined,
+      updatedAt: Date.now(),
+      username: isGlobal ? "All" : username,
+      type,
+    };
+    setNotes([...notes, newNote]);
+    setEditingId(newNote.id);
     setIsAdding(true);
   };
 
@@ -108,14 +122,11 @@ export default function NoteApp() {
   };
 
   const saveEdit = (id, updatedFields) => {
-
-      const updatedNotes = notes.map((n) =>
+    const updatedNotes = notes.map((n) =>
       n.id === id
         ? {
             ...n,
-            title: updatedFields.title,
-            content: updatedFields.content,
-            tags: updatedFields.tags,
+            ...updatedFields,
             username: updatedFields.isGlobal ? "All" : username,
             updatedAt: Date.now(),
           }
@@ -140,6 +151,7 @@ export default function NoteApp() {
       tags: editTags.split(",").map(t => t.trim()).filter(Boolean),
       updatedAt: Date.now(),
       username: isGlobal ? "All" : username,
+      type: "note", // defaulting to 'note' type
     };
     const updatedNotes = [...notes, newNote];
     setNotes(updatedNotes);
@@ -199,43 +211,79 @@ export default function NoteApp() {
         </View>
       )}
 
-      {viewingId && (
-        <NoteViewer
-          note={notes.find(n => n.id === viewingId)}
-          onEdit={() => startEdit(notes.find(n => n.id === viewingId))}
-          onBack={() => setViewingId(null)}
-          isDark={isDark}
-        />
-      )}
+      {viewingId && (() => {
+        const note = notes.find(n => n.id === viewingId);
+        if (!note) return null;
+        return note.type === "list" ? (
+          <ListViewer
+            note={note}
+            onEdit={() => startEdit(note)}
+            onBack={() => setViewingId(null)}
+          />
+        ) : (
+          <NoteViewer
+            note={note}
+            onEdit={() => startEdit(note)}
+            onBack={() => setViewingId(null)}
+            isDark={isDark}
+          />
+        );
+      })()}
 
-      {isAdding && (
-        <NoteEditor
-          noteTitle={editTitle}
-          setNoteTitle={setEditTitle}
-          noteContent={editContent}
-          setNoteContent={setEditContent}
-          tags={editTags}
-          setTags={setEditTags}
-          allTags={allTags}
-          isGlobal={isGlobal}
-          setIsGlobal={setIsGlobal}
-          editingId={editingId}
-          originalNote={notes.find(n => n.id === editingId)}
-          onAdd={
-            editingId
-              ? () => {
-                  saveEdit(editingId, {
-                    title: editTitle,
-                    content: { text: editContent },
-                    tags: editTags.split(",").map(t => t.trim()).filter(Boolean),
-                    isGlobal,
-                  });
-                  handleCancelEdit();
-                }
-              : handleAddNote
-          }
-          onCancel={handleCancelEdit}
-        />
+      {isAdding && (() => {
+        const noteBeingEdited = notes.find(n => n.id === editingId);
+        const isList = noteBeingEdited?.type === "list";
+
+        if (isList) {
+          return (
+            <ListEditor
+              note={noteBeingEdited}
+              onSave={(updatedNote) => {
+                console.log("UPDANOT", updatedNote);
+                saveEdit(editingId, updatedNote);
+                handleCancelEdit();
+              }}
+              onCancel={handleCancelEdit}
+            />
+          );
+        }
+
+        return (
+          <NoteEditor
+            noteTitle={editTitle}
+            setNoteTitle={setEditTitle}
+            noteContent={editContent}
+            setNoteContent={setEditContent}
+            tags={editTags}
+            setTags={setEditTags}
+            allTags={allTags}
+            isGlobal={isGlobal}
+            setIsGlobal={setIsGlobal}
+            editingId={editingId}
+            originalNote={noteBeingEdited}
+            onAdd={
+              editingId
+                ? () => {
+                    saveEdit(editingId, {
+                      title: editTitle,
+                      content: { text: editContent },
+                      tags: editTags.split(",").map(t => t.trim()).filter(Boolean),
+                      isGlobal,
+                    });
+                    handleCancelEdit();
+                  }
+                : handleAddNote
+            }
+            onCancel={handleCancelEdit}
+          />
+        );
+      })()}
+
+      {!isAdding && !viewingId && (
+        <View style={{ flexDirection: "row", gap: 10, marginBottom: 10 }}>
+          <Button title="Add Note" onPress={() => startAddNote("note")} />
+          <Button title="Add List" onPress={() => startAddNote("list")} />
+        </View>
       )}
 
       {!isAdding && !viewingId && (
@@ -254,21 +302,30 @@ export default function NoteApp() {
         />
       )}
 
-      {/* usernameModalVisible && (
-        <View style={styles.modalOverlay}>
-          <View style={styles.modal}>
-            <Text style={styles.modalTitle}>Enter your username</Text>
-            <TextInput
-              style={styles.input}
-              value={usernameInput}
-              onChangeText={setUsernameInput}
-              placeholder="Username"
-              placeholderTextColor={isDark ? "#888" : "#666"}
-            />
-            <Button title="Save" onPress={saveUsername} />
+      {lastSyncedAt && (
+        <Text style={{ textAlign: "center", marginTop: 10, fontSize: 12, color: isDark ? "#aaa" : "#888" }}>
+          Last synced at: {new Date(lastSyncedAt).toLocaleTimeString()}
+        </Text>
+      )}
+
+      {!username && (
+        <Modal visible={usernameModalVisible} transparent animationType="fade">
+          <View style={styles.modalOverlay}>
+            <View style={styles.modal}>
+              <Text style={styles.modalTitle}>Enter a username</Text>
+              <TextInput
+                value={usernameInput}
+                onChangeText={setUsernameInput}
+                placeholder="Enter your username"
+                style={{ borderColor: "#ccc", borderWidth: 1, padding: 8, marginBottom: 10 }}
+              />
+              <View style={styles.buttonRow}>
+                <Button title="Save" onPress={saveUsername} />
+              </View>
+            </View>
           </View>
-        </View>
-      ) */}
+        </Modal>
+      )}
     </View>
   );
 }

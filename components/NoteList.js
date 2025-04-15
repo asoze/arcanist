@@ -13,6 +13,7 @@ import TagSuggestions from "./TagSuggestions";
 import Markdown from "react-native-markdown-display";
 import NoteEditor from "./NoteEditor"; // Assuming NoteEditor is imported
 import { stringToColor } from "../utils/stringToColor";
+import { tagStyles } from "../styles/tagStyles";
 
 const stripMarkdownLists = (text) => {
   return text
@@ -68,15 +69,6 @@ export default function NoteList({
     tagsContainer: {
       flexDirection: "row",
       flexWrap: "wrap",
-      marginTop: 4,
-    },
-    tagBadge: {
-      paddingVertical: 2,
-      paddingHorizontal: 8,
-      borderRadius: 12,
-      color: "#fff",
-      fontSize: 12,
-      marginRight: 4,
       marginTop: 4,
     },
     activeTag: {
@@ -205,29 +197,25 @@ export default function NoteList({
           ) : (
             <>
               {item.username === "All" && <Text style={styles.sharedLabel}>🌐 Shared</Text>}
-              <Text style={styles.noteTitle}>{item.title}</Text>
-              {item.content?.text && (
-                <Markdown style={{ body: styles.preview }}>
-                  {stripMarkdownLists(item.content.text.split(" ").slice(0, 40).join(" ") + "...")}
-                </Markdown>
-              )}
-              <Text style={styles.timestamp}>
-                {new Date(item.updatedAt).toLocaleString("en-US", {
-                  month: "2-digit",
-                  day: "2-digit",
-                  year: "numeric",
-                  hour: "2-digit",
-                  minute: "2-digit",
-                  second: "2-digit",
-                  hour12: false,
-                })}
+              <Text style={styles.noteTitle}>
+                {item.type === "list" ? "🧾 " : "📝 "}
+                {item.title}
               </Text>
+              {item.type === "list" ? (
+                <Text style={styles.preview}>{(item.items?.length || 0)} items</Text>
+              ) : (
+                item.content?.text && (
+                  <Markdown style={{ body: styles.preview }}>
+                    {stripMarkdownLists(item.content.text.split(" ").slice(0, 40).join(" ") + "...")}
+                  </Markdown>
+                )
+              )}
               <View style={styles.tagsContainer}>
                 {item.tags?.map((tag, i) => (
                   <Text
                     key={i}
                     style={[
-                      styles.tagBadge,
+                      tagStyles.tag,
                       { backgroundColor: stringToColor(tag) },
                       activeTag === tag && styles.activeTag,
                     ]}
@@ -240,6 +228,17 @@ export default function NoteList({
                   </Text>
                 ))}
               </View>
+              <Text style={styles.timestamp}>
+                {new Date(item.updatedAt).toLocaleString("en-US", {
+                  month: "2-digit",
+                  day: "2-digit",
+                  year: "numeric",
+                  hour: "2-digit",
+                  minute: "2-digit",
+                  second: "2-digit",
+                  hour12: false,
+                })}
+              </Text>
             </>
           )}
         </Pressable>
@@ -267,9 +266,6 @@ export default function NoteList({
 
   return (
     <>
-      <View style={styles.buttonRow}>
-        <Button title="Add Note" onPress={onStartAdd} />
-      </View>
       <FlatList
         data={sortedNotes}
         keyExtractor={(item) => item.id}

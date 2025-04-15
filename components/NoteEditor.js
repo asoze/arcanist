@@ -4,6 +4,7 @@ import TagSuggestions from "./TagSuggestions";
 import Markdown from "react-native-markdown-display";
 import { useColorScheme } from "react-native";
 import { stringToColor } from "../utils/stringToColor";
+import { tagStyles } from "../styles/tagStyles";
 
 export default function NoteEditor({
   noteTitle,
@@ -85,15 +86,22 @@ export default function NoteEditor({
         <Button title="•" onPress={() => {
           const prefix = "- ";
           const start = selection.start;
+          const end = selection.end;
+          const before = noteContent.slice(0, start);
+          const after = noteContent.slice(end);
+          const selected = noteContent.slice(start, end);
+
           const newText =
-            noteContent.slice(0, start) +
+            before +
             prefix +
-            noteContent.slice(start);
+            selected +
+            after;
 
           setNoteContent(newText);
+          const offset = prefix.length;
           setSelection({
-            start: start + prefix.length,
-            end: start + prefix.length,
+            start: start + offset,
+            end: end + offset,
           });
         }} />
       </View>
@@ -123,17 +131,8 @@ export default function NoteEditor({
           .map((tag) => tag.trim())
           .filter(Boolean)
           .map((tag) => (
-            <View key={tag} style={{
-              flexDirection: "row",
-              alignItems: "center",
-              backgroundColor: isDark ? "#444" : "#ddd",
-              paddingHorizontal: 8,
-              paddingVertical: 4,
-              borderRadius: 12,
-              marginRight: 6,
-              marginBottom: 6,
-            }}>
-              <Text style={{ color: isDark ? "#eee" : "#333", marginRight: 6 }}>
+            <View key={tag} style={[tagStyles.tag, { flexDirection: "row", alignItems: "center" }]}>
+              <Text style={{ color: "#fff", marginRight: 6 }}>
                 {tag}
               </Text>
               <Pressable onPress={() => {
@@ -144,7 +143,7 @@ export default function NoteEditor({
                   .join(", ");
                 setTags(updatedTags);
               }}>
-                <Text style={{ color: isDark ? "#aaa" : "#555", fontWeight: "bold" }}>
+                <Text style={{ color: "#ccc", fontWeight: "bold" }}>
                   ×
                 </Text>
               </Pressable>
