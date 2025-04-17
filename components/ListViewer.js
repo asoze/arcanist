@@ -30,9 +30,13 @@ export default function ListViewer({ note, onEdit, onBack }) {
         )}
       />
 
-      <View style={{ marginTop: 24 }}>
-        <Button title="Edit" onPress={onEdit} />
-        <Button title="Back" onPress={onBack} color="gray" />
+      <View style={{ marginTop: 24, flexDirection: "row", justifyContent: "flex-end" }}>
+        <View style={{ marginRight: 8 }}>
+          <Button title="Edit" onPress={onEdit} />
+        </View>
+        <View>
+          <Button title="Back" onPress={onBack} color="gray" />
+        </View>
       </View>
     </View>
   );

@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
-import { View, Text, StyleSheet, Button, useColorScheme, Modal, TextInput } from "react-native";
+import { View, Text, StyleSheet, Button, useColorScheme, Modal, TextInput, Pressable } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import NoteList from "../components/NoteList";
 import NoteEditor from "../components/NoteEditor"; // Import NoteEditor
@@ -17,12 +17,15 @@ export default function NoteApp() {
   const [isGlobal, setIsGlobal] = useState(false); // New state for global sharing
   const [isAdding, setIsAdding] = useState(false); // New state for editing mode
   const [viewingId, setViewingId] = useState(null); // New state for viewing mode
+  const [serverModalVisible, setServerModalVisible] = useState(false);
+  const [serverUrl, setServerUrl] = useState("");
+  const [configMenuVisible, setConfigMenuVisible] = useState(false); // New state for config menu
 
   // First, load persisted notes so that 'notes' and 'setNotes' are defined
   const { notes, setNotes, loading, error } = usePersistedNotes('notes', []);
 
   // Now initialize the sync hook using the persisted notes values
-  const { syncNotes, skipEffectRef, lastSyncedAt } = useNoteSync(notes, setNotes);
+  const { syncNotes, skipEffectRef, lastSyncedAt } = useNoteSync(notes, setNotes, serverUrl);
 
   // Define a debounced sync function
   const debouncedSync = useCallback((notesToSync) => {
@@ -54,6 +57,10 @@ export default function NoteApp() {
     AsyncStorage.setItem("username", fallback).then(() => {
       setUsername(fallback);
     });
+
+    AsyncStorage.getItem("serverUrl").then(url => {
+      if (url) setServerUrl(url);
+    });
   }, []);
 
   const saveUsername = async () => {
@@ -61,6 +68,13 @@ export default function NoteApp() {
       await AsyncStorage.setItem("username", usernameInput.trim());
       setUsername(usernameInput.trim());
       setUsernameModalVisible(false);
+    }
+  };
+
+  const saveServerUrl = async () => {
+    if (serverUrl.trim()) {
+      await AsyncStorage.setItem("serverUrl", serverUrl.trim());
+      setServerModalVisible(false);
     }
   };
 
@@ -195,8 +209,20 @@ export default function NoteApp() {
 
   return (
     <View style={styles.container}>
-      <View style={styles.syncTopRight}>
-        <Button title="Sync Now" onPress={() => syncNotes(true, notes)} />
+      <View style={{ position: "absolute", top: 20, right: 20, zIndex: 5 }}>
+        <Pressable
+          onPress={() => setConfigMenuVisible(true)}
+          style={{
+            borderWidth: 1,
+            borderColor: "#ccc",
+            backgroundColor: "transparent",
+            paddingVertical: 6,
+            paddingHorizontal: 12,
+            borderRadius: 4,
+          }}
+        >
+          <Text style={{ color: "#ccc", fontSize: 18 }}>☰</Text>
+        </Pressable>
       </View>
 
       <Text style={styles.title}>Arcanist</Text>
@@ -305,6 +331,8 @@ export default function NoteApp() {
       {lastSyncedAt && (
         <Text style={{ textAlign: "center", marginTop: 10, fontSize: 12, color: isDark ? "#aaa" : "#888" }}>
           Last synced at: {new Date(lastSyncedAt).toLocaleTimeString()}
+          {"\n"}
+          Connected to: {serverUrl || "default server"}
         </Text>
       )}
 
@@ -326,6 +354,38 @@ export default function NoteApp() {
           </View>
         </Modal>
       )}
+
+      <Modal visible={serverModalVisible} transparent animationType="fade">
+        <View style={styles.modalOverlay}>
+          <View style={styles.modal}>
+            <Text style={styles.modalTitle}>Change Server URL</Text>
+            <TextInput
+              value={serverUrl}
+              onChangeText={setServerUrl}
+              placeholder="Enter server URL"
+              style={{ borderColor: "#ccc", borderWidth: 1, padding: 8, marginBottom: 10 }}
+            />
+            <View style={styles.buttonRow}>
+              <Button title="Cancel" onPress={() => setServerModalVisible(false)} />
+              <View style={{ width: 10 }} />
+              <Button title="Save" onPress={saveServerUrl} />
+            </View>
+          </View>
+        </View>
+      </Modal>
+
+      <Modal visible={configMenuVisible} transparent animationType="fade">
+        <View style={styles.modalOverlay}>
+          <View style={styles.modal}>
+            <Text style={styles.modalTitle}>Settings</Text>
+            <Button title="Sync Now" onPress={() => { syncNotes(true, notes); setConfigMenuVisible(false); }} />
+            <View style={{ height: 10 }} />
+            <Button title="Change Server URL" onPress={() => { setServerModalVisible(true); setConfigMenuVisible(false); }} />
+            <View style={{ height: 20 }} />
+            <Button title="Close" onPress={() => setConfigMenuVisible(false)} />
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }

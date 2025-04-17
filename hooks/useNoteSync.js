@@ -4,9 +4,8 @@ import NetInfo from "@react-native-community/netinfo";
 import { AppState } from "react-native";
 
 const SYNC_INTERVAL_MS = 30 * 1000;
-const REMOTE_URL = "http://192.168.68.50:4000/notes"; // use your LAN IP on mobile
 
-export function useNoteSync(notes, setNotes) {
+export function useNoteSync(notes, setNotes, serverUrl) {
   const lastSyncRef = useRef(0);
   const isMergingRef = useRef(false); // prevent onChange-triggered loops
   const mergeTimeoutRef = useRef(null); // debounce timer
@@ -33,8 +32,13 @@ export function useNoteSync(notes, setNotes) {
 
       const localNotes = overrideNotes || [...notes];
 
-      console.log("🔄 Posting notes to server...");
-      const postRes = await fetch(REMOTE_URL, {
+      console.log("CUREIOUS");
+      const attempt = await fetch( `${serverUrl}/notes`);
+      const att1 = await attempt.json();
+      console.log("CHEKCING", att1);
+
+      console.log("🔄 Posting notes to server...", serverUrl);
+      const postRes = await fetch(`${serverUrl}/notes`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(localNotes),
@@ -45,7 +49,7 @@ export function useNoteSync(notes, setNotes) {
       await new Promise((resolve) => setTimeout(resolve, 300));
 
       console.log("📥 Fetching notes from server...");
-      const response = await fetch(REMOTE_URL);
+      const response = await fetch(`${serverUrl}/notes`);
       if (!response.ok) throw new Error(`GET failed: ${response.status}`);
 
       const remoteNotes = await response.json();
@@ -71,10 +75,11 @@ export function useNoteSync(notes, setNotes) {
       isMergingRef.current = false;
       skipEffectRef.current = false; // Reset after syncing
 
+
       // Replace final POST with debounce
       if (mergeTimeoutRef.current) clearTimeout(mergeTimeoutRef.current);
       mergeTimeoutRef.current = setTimeout(() => {
-        fetch(REMOTE_URL, {
+        fetch(`${serverUrl}/notes`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify(mergedNotes),
