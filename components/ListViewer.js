@@ -1,8 +1,17 @@
 import React from "react";
-import { View, Text, FlatList, Button, useColorScheme, StyleSheet } from "react-native";
+import { View, Text, FlatList, Button, useColorScheme } from "react-native";
 import { tagStyles } from "../styles/tagStyles";
+import { Checkbox } from "react-native-paper";
 
-export default function ListViewer({ note, onEdit, onBack }) {
+/**
+ * ListViewer displays a checklist that can be checked off without entering edit mode.
+ * Props:
+ *   - note: the list note object { title, tags, items }
+ *   - onEdit: callback to enter edit mode
+ *   - onBack: callback to exit view mode
+ *   - onToggleItem: callback(itemId) to toggle checked status
+ */
+export default function ListViewer({ note, onEdit, onBack, onToggleItem }) {
   const isDark = useColorScheme() === "dark";
   const textColor = { color: isDark ? "#fff" : "#000" };
 
@@ -26,7 +35,22 @@ export default function ListViewer({ note, onEdit, onBack }) {
         data={note.items}
         keyExtractor={item => item.id}
         renderItem={({ item }) => (
-          <Text style={{ fontSize: 16, marginBottom: 6, ...textColor }}>• {item.text}</Text>
+          <View style={{ flexDirection: "row", alignItems: "center", marginBottom: 6 }}>
+            <Checkbox
+              status={item.checked ? "checked" : "unchecked"}
+              onPress={() => onToggleItem && onToggleItem(item.id)}
+            />
+            <Text
+              style={{
+                fontSize: 16,
+                marginLeft: 8,
+                ...textColor,
+                textDecorationLine: item.checked ? "line-through" : "none",
+              }}
+            >
+              {item.text}
+            </Text>
+          </View>
         )}
       />
 

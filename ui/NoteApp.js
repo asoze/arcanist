@@ -8,6 +8,7 @@ import ListEditor from "../components/ListEditor";
 import ListViewer from "../components/ListViewer";
 import { useNoteSync } from "../hooks/useNoteSync";
 import usePersistedNotes from "../hooks/usePersistedNotes";
+import { Provider as PaperProvider } from 'react-native-paper';
 
 export default function NoteApp() {
   const syncTimeout = useRef(null);
@@ -83,6 +84,13 @@ export default function NoteApp() {
       syncNotes(true, notes); // ensures loaded notes are used after loading finishes
     }
   }, [loading]);
+
+  useEffect(() => {
+    const server = "http://home.andrewrsweeney.com:4000";
+    AsyncStorage.setItem("serverUrl", server).then(() => {
+      setServerUrl(server);
+    });
+  }, []);
 
   const allTags = Array.from(
     new Set(notes.flatMap((note) => note.tags || [])),
@@ -208,7 +216,8 @@ export default function NoteApp() {
   if (error) return <Text style={styles.title}>Error loading notes.</Text>;
 
   return (
-    <View style={styles.container}>
+    <PaperProvider>
+      <View style={styles.container}>
       <View style={{ position: "absolute", top: 20, right: 20, zIndex: 5 }}>
         <Pressable
           onPress={() => setConfigMenuVisible(true)}
@@ -238,13 +247,22 @@ export default function NoteApp() {
       )}
 
       {viewingId && (() => {
+        console.log("VIWESD", viewingId);
         const note = notes.find(n => n.id === viewingId);
+        console.log("NOTESLIST", note);
         if (!note) return null;
         return note.type === "list" ? (
           <ListViewer
             note={note}
+            items={note.items}
             onEdit={() => startEdit(note)}
             onBack={() => setViewingId(null)}
+            onToggleItem={(itemId) => {
+              const updatedItems = note.items.map(i =>
+                i.id === itemId ? { ...i, checked: !i.checked } : i
+              );
+              saveEdit(note.id, { items: updatedItems });
+            }}
           />
         ) : (
           <NoteViewer
@@ -386,7 +404,8 @@ export default function NoteApp() {
           </View>
         </View>
       </Modal>
-    </View>
+      </View>
+    </PaperProvider>
   );
 }
 

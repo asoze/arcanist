@@ -1,5 +1,6 @@
 import React, { useState } from "react";
 import { View, Text, TextInput, Button, FlatList, Pressable, useColorScheme } from "react-native";
+import { Checkbox } from "react-native-paper";
 import TagSuggestions from "./TagSuggestions";
 
 export default function ListEditor({ note, onSave, onCancel }) {
@@ -17,7 +18,7 @@ export default function ListEditor({ note, onSave, onCancel }) {
     const current = newItem.trim();
     if (!current) return;
     const newId = Date.now().toString();
-    const newEntry = { id: newId, text: current };
+    const newEntry = { id: newId, text: current, checked: false };
     setItems([...items, newEntry]);
     setNewItem("");
     setEditingItemId(null);
@@ -62,15 +63,25 @@ export default function ListEditor({ note, onSave, onCancel }) {
 
       <FlatList
         data={items}
+        extraData={{ editingItemId, editingItemText }}
         keyExtractor={item => item.id}
         renderItem={({ item }) => (
           <View style={{ flexDirection: "row", alignItems: "center", marginBottom: 8 }}>
+            <Checkbox
+              status={item.checked ? "checked" : "unchecked"}
+              onPress={() => {
+                const updated = items.map(i =>
+                  i.id === item.id ? { ...i, checked: !i.checked } : i
+                );
+                setItems(updated);
+              }}
+            />
             {editingItemId === item.id ? (
               <>
                 <TextInput
                   value={editingItemText}
                   onChangeText={setEditingItemText}
-                  style={{ flex: 1, borderBottomWidth: 1, ...textColor }}
+                  style={{ flex: 1, borderBottomWidth: 1, marginLeft: 8, ...textColor }}
                 />
                 <Button
                   title="Save"
@@ -89,6 +100,7 @@ export default function ListEditor({ note, onSave, onCancel }) {
                   style={({ hovered }) => ({
                     flex: 1,
                     paddingVertical: 4,
+                    marginLeft: 8,
                     cursor: "pointer",
                     backgroundColor: hovered ? (isDark ? "#333" : "#eee") : "transparent",
                   })}
@@ -97,7 +109,14 @@ export default function ListEditor({ note, onSave, onCancel }) {
                     setEditingItemText(item.text);
                   }}
                 >
-                  <Text style={{ ...textColor }}>• {item.text}</Text>
+                  <Text
+                    style={{
+                      ...textColor,
+                      textDecorationLine: item.checked ? "line-through" : "none",
+                    }}
+                  >
+                    {item.text}
+                  </Text>
                 </Pressable>
                 <Button
                   title="X"
