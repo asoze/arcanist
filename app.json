@@ -4,11 +4,11 @@
     "slug": "arcanist",
     "version": "1.0.0",
     "orientation": "portrait",
-    "icon": "./assets/arcanist_icon.png",
+    "icon": "./assets/images/arcanist_icon.png",
     "userInterfaceStyle": "light",
     "newArchEnabled": true,
     "splash": {
-      "image": "./assets/splash-icon.png",
+      "image": "./assets/images/splash-icon.png",
       "resizeMode": "contain",
       "backgroundColor": "#ffffff"
     },
@@ -17,15 +17,15 @@
       "bundleIdentifier": "com.asoze.arcanist"
     },
     "android": {
-      "versionCode": 6,
+      "versionCode": 10,
       "adaptiveIcon": {
-        "foregroundImage": "./assets/arcanist_icon.png",
+        "foregroundImage": "./assets/images/arcanist_icon.png",
         "backgroundColor": "#ffffff"
       },
       "package": "com.asoze.arcanist"
     },
     "web": {
-      "favicon": "./assets/favicon.png"
+      "favicon": "./assets/images/favicon.png"
     },
     "extra": {
       "eas": {

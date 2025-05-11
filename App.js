@@ -9,7 +9,7 @@ export default function App() {
   return (
       <View style={{ flex: 1 }}>
         <StatusBar style="dark" backgroundColor="#fff" />
-        return <NoteApp />;
+        <NoteApp />
       </View>
   );
 }

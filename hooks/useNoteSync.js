@@ -1,124 +1,91 @@
-import { useRef, useEffect, useState } from "react";
-import AsyncStorage from "@react-native-async-storage/async-storage";
-import NetInfo from "@react-native-community/netinfo";
-import { AppState } from "react-native";
-
-const SYNC_INTERVAL_MS = 30 * 1000;
+import { useEffect, useRef } from 'react';
+import { logInfo, logError, logWarning } from '../utils/logger';
+const SYNC_INTERVAL_MS = 15000;
+const fallbackUrl = "http://home.andrewrsweeney.com:4000";
 
 export function useNoteSync(notes, setNotes, serverUrl) {
-  const lastSyncRef = useRef(0);
-  const isMergingRef = useRef(false); // prevent onChange-triggered loops
-  const mergeTimeoutRef = useRef(null); // debounce timer
-  const skipEffectRef = useRef(false); // prevent triggering onChange during syncing merges
-  const [lastSyncedAt, setLastSyncedAt] = useState(null); // New state for last sync time
-
-  useEffect(() => {
-    AsyncStorage.getItem("lastSyncAt").then((stored) => {
-      if (stored) {
-        setLastSyncedAt(Number(stored)); // Restore last sync time from storage
-      }
-    });
-  }, []);
+  const skipEffectRef = useRef(false);
+  const lastSyncedAtRef = useRef(0);
 
   const syncNotes = async (force = false, overrideNotes = null) => {
-    try {
-      const now = Date.now();
-      const lastSync = lastSyncRef.current;
-
-      if (!force && now - lastSync < SYNC_INTERVAL_MS) {
-        console.log("Skipping sync: throttled");
-        return;
-      }
-
-      const localNotes = overrideNotes || [...notes];
-
-      console.log("CUREIOUS");
-      const attempt = await fetch( `${serverUrl}/notes`);
-      const att1 = await attempt.json();
-      console.log("CHEKCING", att1);
-
-      console.log("🔄 Posting notes to server...", serverUrl);
-      const postRes = await fetch(`${serverUrl}/notes`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(localNotes),
-      });
-
-      if (!postRes.ok) throw new Error(`POST failed: ${postRes.status}`);
-
-      await new Promise((resolve) => setTimeout(resolve, 300));
-
-      console.log("📥 Fetching notes from server...");
-      const response = await fetch(`${serverUrl}/notes`);
-      if (!response.ok) throw new Error(`GET failed: ${response.status}`);
-
-      const remoteNotes = await response.json();
-
-      const mergedMap = new Map();
-      const allNotes = [...remoteNotes, ...localNotes];
-
-      for (const note of allNotes) {
-        const existing = mergedMap.get(note.id);
-        if (!existing || note.updatedAt > existing.updatedAt) {
-          mergedMap.set(note.id, note);
-        }
-      }
-
-      const mergedNotes = Array.from(mergedMap.values()).filter(note => !note.deleted);
-
-      isMergingRef.current = true;
-      skipEffectRef.current = true; // Set to true during syncing
-      setNotes(mergedNotes);
-      lastSyncRef.current = now;
-      setLastSyncedAt(now); // Update lastSyncedAt after successful sync
-      await AsyncStorage.setItem("lastSyncAt", now.toString());
-      isMergingRef.current = false;
-      skipEffectRef.current = false; // Reset after syncing
-
-
-      // Replace final POST with debounce
-      if (mergeTimeoutRef.current) clearTimeout(mergeTimeoutRef.current);
-      mergeTimeoutRef.current = setTimeout(() => {
-        fetch(`${serverUrl}/notes`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(mergedNotes),
-        }).then((res) => {
-          if (!res.ok) throw new Error(`Debounced POST failed: ${res.status}`);
-          console.log("✅ Debounced merged notes pushed");
-        }).catch((err) => {
-          console.warn("❌ Debounced push error:", err.message);
-        });
-      }, 1000);
-
-      console.log(`✅ Sync complete with ${mergedNotes.length} notes`);
-    } catch (err) {
-      console.warn("❌ Sync error:", err.message);
+    const now = Date.now();
+    if (!serverUrl) {
+      logWarning("Skipping sync: serverUrl is not set");
+      return;
     }
+
+    if (!force && now - lastSyncedAtRef.current < SYNC_INTERVAL_MS) {
+      logInfo("Skipping sync: throttled");
+      return;
+    }
+
+    const localNotes = overrideNotes || [...notes];
+    logInfo("Syncing local notes:", localNotes);
+    logInfo("Using serverUrl:", serverUrl);
+    logInfo("SERVER URL ??? --|" + serverUrl + "|---");
+
+    try {
+        const attempt = await fetch(`http://home.andrewrsweeney.com:4000/notes`, {
+          method: 'GET',
+          headers: {'Accept': 'application/json'},
+          mode: 'cors',
+        });
+
+        logInfo( "ATTEMPT -- " + attempt );
+
+        let serverNotes;
+        if (attempt.headers.get('content-type')?.includes('application/json')) {
+            logInfo("Attempt JSON");
+          serverNotes = await attempt.json();
+        } else {
+          const text = await attempt.text();
+          logError(`Expected JSON but got:\n${text.substring(0, 100)}`);
+          return;
+        }
+        logInfo("Server notes fetched", serverNotes);
+        // Apply merge strategy (could be improved)
+        const merged = mergeNotes(serverNotes, localNotes);
+        setNotes(merged);
+        lastSyncedAtRef.current = now;
+        logInfo("🔄 Sync complete at " + new Date(now).toLocaleTimeString());
+    } catch (err) {
+      console.error(err);
+      logError("Sync failed: " + (err?.message || err));
+    }
+
+  };
+
+  const mergeNotes = (serverNotes, localNotes) => {
+    const mergedMap = new Map();
+    [...serverNotes, ...localNotes].forEach(note => {
+      if (!note.id) return;
+      const existing = mergedMap.get(note.id);
+      if (!existing || (note.updatedAt > existing.updatedAt)) {
+        mergedMap.set(note.id, note);
+      }
+    });
+    return Array.from(mergedMap.values());
   };
 
   useEffect(() => {
-    const unsubscribeNet = NetInfo.addEventListener(state => {
-      if (state.isConnected) {
-        console.log("📶 Network reconnected — syncing notes...");
-        syncNotes(true);
-      }
-    });
+    if (!skipEffectRef.current && serverUrl) {
+      syncNotes(true);
+    }
+  }, [serverUrl]);
 
-    const handleAppStateChange = (state) => {
-      if (state === "active") {
-        console.log("📲 App resumed — syncing notes...");
-        syncNotes(true);
-      }
-    };
+  return { syncNotes, skipEffectRef, lastSyncedAt: lastSyncedAtRef.current };
+}
 
-    const appStateSub = AppState.addEventListener("change", handleAppStateChange);
+export async function testConnection() {
+    logInfo("testConnection --------------------------------");
+    try {
+        const attempt = await fetch(`http://home.andrewrsweeney.com:4000/notes`, {
+            method: 'GET',
+            headers: {'Accept': 'application/json'},
+            mode: 'cors',
+        });
 
-    return () => {
-      unsubscribeNet();
-      appStateSub.remove();
-    };
-  }, []);
-
-  return { syncNotes, skipEffectRef, lastSyncedAt }; // Export lastSyncedAt
+        logInfo("ATTEMPT -- " + attempt);
+        return attempt;
+    }catch (error) { logError( "TC\n",error);}
 }
