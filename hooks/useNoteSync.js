@@ -1,91 +1,46 @@
 import { useEffect, useRef } from 'react';
-import { logInfo, logError, logWarning } from '../utils/logger';
+import { logInfo, logError } from '../utils/logger';
+import { fetchNotesFromServer } from '../utils/fetchNotes';
+import { mergeNotes } from '../utils/mergeNotes';
+
 const SYNC_INTERVAL_MS = 15000;
-const fallbackUrl = "http://home.andrewrsweeney.com:4000";
 
 export function useNoteSync(notes, setNotes, serverUrl) {
-  const skipEffectRef = useRef(false);
-  const lastSyncedAtRef = useRef(0);
+    // Ignore serverUrl for right now
 
-  const syncNotes = async (force = false, overrideNotes = null) => {
-    const now = Date.now();
-    if (!serverUrl) {
-      logWarning("Skipping sync: serverUrl is not set");
-      return;
-    }
+    const skipEffectRef = useRef(false);
+    const lastSyncedAtRef = useRef(0);
 
-    if (!force && now - lastSyncedAtRef.current < SYNC_INTERVAL_MS) {
-      logInfo("Skipping sync: throttled");
-      return;
-    }
+    const syncNotes = async (force = false, overrideNotes = null) => {
+        const now = Date.now();
 
-    const localNotes = overrideNotes || [...notes];
-    logInfo("Syncing local notes:", localNotes);
-    logInfo("Using serverUrl:", serverUrl);
-    logInfo("SERVER URL ??? --|" + serverUrl + "|---");
-
-    try {
-        const attempt = await fetch(`http://home.andrewrsweeney.com:4000/notes`, {
-          method: 'GET',
-          headers: {'Accept': 'application/json'},
-          mode: 'cors',
-        });
-
-        logInfo( "ATTEMPT -- " + attempt );
-
-        let serverNotes;
-        if (attempt.headers.get('content-type')?.includes('application/json')) {
-            logInfo("Attempt JSON");
-          serverNotes = await attempt.json();
-        } else {
-          const text = await attempt.text();
-          logError(`Expected JSON but got:\n${text.substring(0, 100)}`);
-          return;
+        if (!force && now - lastSyncedAtRef.current < SYNC_INTERVAL_MS) {
+            // logInfo("Skipping sync: throttled");
+            return;
         }
-        logInfo("Server notes fetched", serverNotes);
-        // Apply merge strategy (could be improved)
-        const merged = mergeNotes(serverNotes, localNotes);
-        setNotes(merged);
-        lastSyncedAtRef.current = now;
-        logInfo("🔄 Sync complete at " + new Date(now).toLocaleTimeString());
-    } catch (err) {
-      console.error(err);
-      logError("Sync failed: " + (err?.message || err));
-    }
 
-  };
+        const localNotes = overrideNotes || [...notes];
+        logInfo("Syncing local notes:", localNotes.length);
 
-  const mergeNotes = (serverNotes, localNotes) => {
-    const mergedMap = new Map();
-    [...serverNotes, ...localNotes].forEach(note => {
-      if (!note.id) return;
-      const existing = mergedMap.get(note.id);
-      if (!existing || (note.updatedAt > existing.updatedAt)) {
-        mergedMap.set(note.id, note);
-      }
-    });
-    return Array.from(mergedMap.values());
-  };
+        try {
+            const serverNotes = await fetchNotesFromServer();
+            logInfo("Server notes fetched", serverNotes.length);
 
-  useEffect(() => {
-    if (!skipEffectRef.current && serverUrl) {
-      syncNotes(true);
-    }
-  }, [serverUrl]);
+            const merged = mergeNotes(serverNotes, localNotes);
+            setNotes(merged);
+            lastSyncedAtRef.current = now;
+            logInfo("🔄 Sync complete at " + new Date(now).toLocaleTimeString());
+        } catch (err) {
+            console.error(err);
+            logError("Sync failed: " + (err?.message || err));
+        }
+    };
 
-  return { syncNotes, skipEffectRef, lastSyncedAt: lastSyncedAtRef.current };
-}
+    useEffect(() => {
+        if (!skipEffectRef.current) {
+            syncNotes(true);
+        }
+    }, [serverUrl]);
 
-export async function testConnection() {
-    logInfo("testConnection --------------------------------");
-    try {
-        const attempt = await fetch(`http://home.andrewrsweeney.com:4000/notes`, {
-            method: 'GET',
-            headers: {'Accept': 'application/json'},
-            mode: 'cors',
-        });
-
-        logInfo("ATTEMPT -- " + attempt);
-        return attempt;
-    }catch (error) { logError( "TC\n",error);}
+    return { syncNotes, skipEffectRef, lastSyncedAt: lastSyncedAtRef.current };
 }
