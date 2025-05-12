@@ -1,46 +1,36 @@
 import { useEffect, useRef } from 'react';
 import { logInfo, logError } from '../utils/logger';
 import { fetchNotesFromServer } from '../utils/fetchNotes';
-import { mergeNotes } from '../utils/mergeNotes';
+import { reconcile } from '../utils/reconcile';
+import { pushNotesToServer } from '../utils/pushNotesToServer';
 
-const SYNC_INTERVAL_MS = 15000;
+const SYNC_INTERVAL_MS = 15_000;
 
 export function useNoteSync(notes, setNotes, serverUrl) {
-    // Ignore serverUrl for right now
-
-    const skipEffectRef = useRef(false);
     const lastSyncedAtRef = useRef(0);
 
     const syncNotes = async (force = false, overrideNotes = null) => {
         const now = Date.now();
+        if (!force && now - lastSyncedAtRef.current < SYNC_INTERVAL_MS) return;
 
-        if (!force && now - lastSyncedAtRef.current < SYNC_INTERVAL_MS) {
-            // logInfo("Skipping sync: throttled");
-            return;
-        }
-
-        const localNotes = overrideNotes || [...notes];
-        logInfo("Syncing local notes:", localNotes.length);
+        const local = overrideNotes || notes;
 
         try {
-            const serverNotes = await fetchNotesFromServer();
-            logInfo("Server notes fetched", serverNotes.length);
+            const remote = await fetchNotesFromServer(serverUrl);
+            const { merged, pushUpstream } = reconcile(local, remote);
 
-            const merged = mergeNotes(serverNotes, localNotes);
+            // POST only the diverging/local‑newer notes
+            await pushNotesToServer(serverUrl, pushUpstream);
+
             setNotes(merged);
             lastSyncedAtRef.current = now;
-            logInfo("🔄 Sync complete at " + new Date(now).toLocaleTimeString());
+            logInfo(`Sync complete — ${merged.length} total notes`);
         } catch (err) {
-            console.error(err);
-            logError("Sync failed: " + (err?.message || err));
+            logError(`Sync failed: ${err.message}`);
         }
     };
 
-    useEffect(() => {
-        if (!skipEffectRef.current) {
-            syncNotes(true);
-        }
-    }, [serverUrl]);
+    useEffect(() => { if (serverUrl) syncNotes(true); }, [serverUrl]);
 
-    return { syncNotes, skipEffectRef, lastSyncedAt: lastSyncedAtRef.current };
+    return { syncNotes, lastSyncedAt: lastSyncedAtRef.current };
 }

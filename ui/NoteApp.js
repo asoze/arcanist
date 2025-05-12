@@ -36,6 +36,8 @@ import {
 import NetworkDebugScreen from "./NetworkDebugScreen"; // ← NEW
 
 export default function NoteApp() {
+  const serverUrl = "https://home.andrewrsweeney.com";
+
   const syncTimeout = useRef(null);
   const [username, setUsername] = useState(null);
   const [usernameModalVisible, setUsernameModalVisible] = useState(false);
@@ -44,7 +46,6 @@ export default function NoteApp() {
   const [isAdding, setIsAdding] = useState(false);
   const [viewingId, setViewingId] = useState(null);
   const [serverModalVisible, setServerModalVisible] = useState(false);
-  const [serverUrl, setServerUrl] = useState("");
   const [configMenuVisible, setConfigMenuVisible] = useState(false);
   const [showAdminErrors, setShowAdminErrors] = useState(false);
   const [themeOverride, setThemeOverride] = useState(null);
@@ -423,32 +424,32 @@ export default function NoteApp() {
           )}
 
           {/* Server URL modal */}
-          <Modal visible={serverModalVisible} transparent animationType="fade">
-            <View style={styles.modalOverlay}>
-              <View style={styles.modal}>
-                <Text style={styles.modalTitle}>Change Server URL</Text>
-                <TextInput
-                    value={serverUrl}
-                    onChangeText={setServerUrl}
-                    placeholder="Enter server URL"
-                    style={{
-                      borderColor: "#ccc",
-                      borderWidth: 1,
-                      padding: 8,
-                      marginBottom: 10,
-                    }}
-                />
-                <View style={styles.buttonRow}>
-                  <Button
-                      title="Cancel"
-                      onPress={() => setServerModalVisible(false)}
-                  />
-                  <View style={{ width: 10 }} />
-                  <Button title="Save" onPress={saveServerUrl} />
-                </View>
-              </View>
-            </View>
-          </Modal>
+          {/*<Modal visible={serverModalVisible} transparent animationType="fade">*/}
+          {/*  <View style={styles.modalOverlay}>*/}
+          {/*    <View style={styles.modal}>*/}
+          {/*      <Text style={styles.modalTitle}>Change Server URL</Text>*/}
+          {/*      <TextInput*/}
+          {/*          value={serverUrl}*/}
+          {/*          onChangeText={setServerUrl}*/}
+          {/*          placeholder="Enter server URL"*/}
+          {/*          style={{*/}
+          {/*            borderColor: "#ccc",*/}
+          {/*            borderWidth: 1,*/}
+          {/*            padding: 8,*/}
+          {/*            marginBottom: 10,*/}
+          {/*          }}*/}
+          {/*      />*/}
+          {/*      <View style={styles.buttonRow}>*/}
+          {/*        <Button*/}
+          {/*            title="Cancel"*/}
+          {/*            onPress={() => setServerModalVisible(false)}*/}
+          {/*        />*/}
+          {/*        <View style={{ width: 10 }} />*/}
+          {/*        <Button title="Save" onPress={saveServerUrl} />*/}
+          {/*      </View>*/}
+          {/*    </View>*/}
+          {/*  </View>*/}
+          {/*</Modal>*/}
 
           {/* Settings modal (hamburger) */}
           <Modal visible={configMenuVisible} transparent animationType="fade">
@@ -465,14 +466,14 @@ export default function NoteApp() {
                 />
                 <View style={{ height: 10 }} />
 
-                <Button
-                    title="Change Server URL"
-                    onPress={() => {
-                      setServerModalVisible(true);
-                      setConfigMenuVisible(false);
-                    }}
-                />
-                <View style={{ height: 10 }} />
+                {/*<Button*/}
+                {/*    title="Change Server URL"*/}
+                {/*    onPress={() => {*/}
+                {/*      setServerModalVisible(true);*/}
+                {/*      setConfigMenuVisible(false);*/}
+                {/*    }}*/}
+                {/*/>*/}
+                {/*<View style={{ height: 10 }} />*/}
 
                 <Button
                     title="View Error Log"
