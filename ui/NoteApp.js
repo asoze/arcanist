@@ -73,7 +73,7 @@ export default function NoteApp() {
   );
 
   useEffect(() => {
-    if (!skipEffectRef.current) {
+    if (!skipEffectRef?.current) {
       debouncedSync(notes);
     }
   }, [notes, debouncedSync, skipEffectRef]);
