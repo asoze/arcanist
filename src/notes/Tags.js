@@ -45,7 +45,7 @@ export function TagPills({ tags, colors }) {
 }
 
 /** Pills for the current tags plus an input; Enter or a comma adds a tag. */
-export function TagEditor({ tags, onChange, colors }) {
+export function TagEditor({ tags, onChange, commitRef, colors }) {
   const { notes } = useNotes();
   const [draft, setDraft] = useState('');
 
@@ -81,6 +81,7 @@ export function TagEditor({ tags, onChange, colors }) {
     add(draft);
     setDraft('');
   };
+  if (commitRef) commitRef.current = commitDraft;
 
   // Pressing a suggestion blurs the input first; don't commit the partial draft too.
   const pickingSuggestion = useRef(false);

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Platform, Pressable, StyleSheet, Switch, Text, TextInput, View } from 'react-native';
 import { Stack, useLocalSearchParams, useNavigation } from 'expo-router';
 import {
@@ -27,12 +27,12 @@ const BODY_CSS = `
 function NoteEditor({ note, isNew }) {
   const navigation = useNavigation();
   const { isDark, colors } = useColors();
-  const { updateNote, deleteNote } = useNotes();
+  const { updateNote, deleteNote, sync } = useNotes();
   const [title, setTitle] = useState(note.title);
   const [tags, setTags] = useState(note.tags);
   const [shared, setShared] = useState(note.shared);
   const [initialHtml] = useState(note.html);
-  const deleting = useRef(false);
+  const leaving = useRef(false);
 
   const editor = useEditorBridge({
     autofocus: false,
@@ -58,26 +58,42 @@ function NoteEditor({ note, isNew }) {
   const latest = useRef({ title, tags });
   latest.current = { title, tags };
 
+  /** Saves the latest body, or discards a new note left blank. Returns whether the note was kept. */
+  const flush = useCallback(async () => {
+    const finalHtml = await editor.getHTML().catch(() => null);
+    const final = {
+      title: latest.current.title,
+      tags: latest.current.tags,
+      html: finalHtml ?? lastHtml.current ?? initialHtml,
+    };
+    if (isNew && isBlankNote(final)) {
+      deleteNote(note.id);
+      return false;
+    }
+    if (finalHtml != null && finalHtml !== (lastHtml.current ?? finalHtml)) {
+      lastHtml.current = finalHtml;
+      updateNote(note.id, { html: finalHtml });
+    }
+    return true;
+  }, [editor, note.id, isNew, initialHtml, updateNote, deleteNote]);
+
   useEffect(() => {
     return navigation.addListener('beforeRemove', (event) => {
-      if (deleting.current) return;
+      if (leaving.current) return;
       event.preventDefault();
-      const finish = (finalHtml) => {
-        const final = {
-          title: latest.current.title,
-          tags: latest.current.tags,
-          html: finalHtml ?? lastHtml.current ?? initialHtml,
-        };
-        if (isNew && isBlankNote(final)) {
-          deleteNote(note.id);
-        } else if (finalHtml != null && finalHtml !== (lastHtml.current ?? finalHtml)) {
-          updateNote(note.id, { html: finalHtml });
-        }
-        navigation.dispatch(event.data.action);
-      };
-      editor.getHTML().then(finish, () => finish(null));
+      flush().then(() => navigation.dispatch(event.data.action));
     });
-  }, [navigation, editor, note.id, isNew, initialHtml, updateNote, deleteNote]);
+  }, [navigation, flush]);
+
+  const commitTagDraft = useRef(null);
+
+  const onSave = async () => {
+    if (leaving.current) return;
+    leaving.current = true;
+    commitTagDraft.current?.();
+    if (await flush()) sync();
+    navigation.goBack();
+  };
 
   const onDelete = async () => {
     const ok = await confirm({
@@ -86,7 +102,7 @@ function NoteEditor({ note, isNew }) {
       confirmLabel: 'Delete',
     });
     if (!ok) return;
-    deleting.current = true;
+    leaving.current = true;
     deleteNote(note.id);
     navigation.goBack();
   };
@@ -97,6 +113,7 @@ function NoteEditor({ note, isNew }) {
   };
 
   const onTagsChange = (next) => {
+    latest.current.tags = next;
     setTags(next);
     updateNote(note.id, { tags: next });
   };
@@ -113,9 +130,18 @@ function NoteEditor({ note, isNew }) {
       <Stack.Screen
         options={{
           headerRight: () => (
-            <Pressable onPress={onDelete} accessibilityRole="button" style={styles.headerButton}>
-              <Text style={{ color: colors.error, fontSize: 16 }}>Delete</Text>
-            </Pressable>
+            <View style={styles.headerButtons}>
+              <Pressable onPress={onDelete} accessibilityRole="button" style={styles.headerButton}>
+                <Text style={{ color: colors.error, fontSize: 16 }}>Delete</Text>
+              </Pressable>
+              <Pressable
+                onPress={onSave}
+                accessibilityRole="button"
+                style={[styles.saveButton, { backgroundColor: colors.accent }]}
+              >
+                <Text style={styles.saveText}>Save</Text>
+              </Pressable>
+            </View>
           ),
         }}
       />
@@ -128,7 +154,7 @@ function NoteEditor({ note, isNew }) {
         style={[styles.title, { color: colors.text }]}
       />
       <View style={[styles.metaRow, { borderColor: colors.border }]}>
-        <TagEditor tags={tags} onChange={onTagsChange} colors={colors} />
+        <TagEditor tags={tags} onChange={onTagsChange} commitRef={commitTagDraft} colors={colors} />
         <Text style={[styles.sharedLabel, { color: colors.muted }]}>Shared</Text>
         <Switch
           value={shared}
@@ -182,7 +208,10 @@ const styles = StyleSheet.create({
   },
   sharedLabel: { fontSize: 14 },
   byline: { fontSize: 13, marginBottom: 8 },
+  headerButtons: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingRight: 8 },
   headerButton: { paddingHorizontal: 8 },
+  saveButton: { borderRadius: 999, paddingHorizontal: 16, paddingVertical: 6 },
+  saveText: { color: '#ffffff', fontSize: 16, fontWeight: '600' },
   fill: { flex: 1 },
   toolbar: { borderBottomWidth: StyleSheet.hairlineWidth, marginBottom: 8 },
   missing: { textAlign: 'center', marginTop: 48, fontSize: 15 },
