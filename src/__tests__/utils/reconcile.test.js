@@ -1,5 +1,5 @@
 // src/__tests__/utils/reconcile.test.js
-import { reconcile } from '../../utils/reconcile';
+import { reconcile } from 'arcanist-common';
 
 describe('reconcile', () => {
   it('should merge local and remote notes correctly', () => {

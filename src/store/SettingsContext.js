@@ -1,7 +1,7 @@
 // src/store/SettingsContext.js
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { useTheme } from '../hooks/useTheme';
+import { useThemeContext } from './ThemeContext';
 import { logInfo, logError } from '../utils/logger';
 
 // Create context
@@ -14,21 +14,24 @@ const SettingsContext = createContext();
  * @returns {React.ReactNode}
  */
 export function SettingsProvider({ children }) {
-  const [username, setUsernameState] = useState('testuser');
+  const [username, setUsernameState] = useState(null);
   const [serverUrl, setServerUrlState] = useState('https://home.andrewrsweeney.com');
   const [isLoading, setIsLoading] = useState(true);
   
-  // Use theme hook
-  const themeContext = useTheme();
+  const themeContext = useThemeContext();
   
   // Load settings from AsyncStorage on mount
   useEffect(() => {
     const loadSettings = async () => {
       try {
-        // Always use 'testuser' as the default username
-        setUsernameState('testuser');
-        await AsyncStorage.setItem('username', 'testuser');
-        logInfo('[SettingsContext] Using default username: testuser');
+        // Load username from storage
+        const storedUsername = await AsyncStorage.getItem('username');
+        if (storedUsername) {
+          setUsernameState(storedUsername);
+          logInfo('[SettingsContext] Loaded username:', storedUsername);
+        } else {
+          logInfo('[SettingsContext] No username found in storage - user will be prompted');
+        }
         
         // Load server URL
         const storedServerUrl = await AsyncStorage.getItem('serverUrl');
@@ -50,9 +53,10 @@ export function SettingsProvider({ children }) {
   const setUsername = async (newUsername) => {
     if (newUsername && newUsername.trim()) {
       try {
-        await AsyncStorage.setItem('username', newUsername.trim());
-        setUsernameState(newUsername.trim());
-        logInfo('[SettingsContext] Saved username:', newUsername.trim());
+        const trimmedUsername = newUsername.trim();
+        await AsyncStorage.setItem('username', trimmedUsername);
+        setUsernameState(trimmedUsername);
+        logInfo('[SettingsContext] Saved username:', trimmedUsername);
       } catch (error) {
         logError('[SettingsContext] Error saving username:', error);
       }

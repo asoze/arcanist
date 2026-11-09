@@ -1,22 +1,28 @@
 // src/hooks/useNoteSync.js
 import { useEffect, useRef, useCallback, useState } from 'react';
-import { AppState, Platform } from 'react-native';
-import { logInfo, logError } from '../utils/logger';
+import { AppState } from 'react-native';
+import { logError } from '../utils/logger';
 import { NotesAPI } from '../services/api';
-import { reconcile } from '../utils/reconcile';
+import { reconcile } from 'arcanist-common';
+import {
+  SYNC_INTERVAL_ACTIVE_MS,
+  SYNC_INTERVAL_BACKGROUND_MS,
+  SYNC_INTERVAL_OFFLINE_MS,
+  SYNC_MAX_RETRIES,
+  SYNC_BACKOFF_FACTOR,
+  SYNC_DEBOUNCE_MS,
+  SYNC_IS_SYNCING_CLEAR_DELAY_MS,
+} from '../constants/sync';
 
-// Adaptive sync intervals based on app state and platform
 const SYNC_INTERVALS = {
-  ACTIVE: 600_000,     // 10 minutes when app is active (for all platforms)
-  BACKGROUND: 1800_000, // 30 minutes when app is in background
-  LOW_BATTERY: 1800_000, // 30 minutes when battery is low
-  OFFLINE: 1800_000     // 30 minutes when offline (for retry attempts)
+  ACTIVE: SYNC_INTERVAL_ACTIVE_MS,
+  BACKGROUND: SYNC_INTERVAL_BACKGROUND_MS,
+  OFFLINE: SYNC_INTERVAL_OFFLINE_MS,
 };
 
-// Sync retry configuration
 const SYNC_RETRY = {
-  MAX_RETRIES: 3,
-  BACKOFF_FACTOR: 2,
+  MAX_RETRIES: SYNC_MAX_RETRIES,
+  BACKOFF_FACTOR: SYNC_BACKOFF_FACTOR,
 };
 
 /**
@@ -75,8 +81,6 @@ export function useNoteSync(notes, setNotes, serverUrl) {
       setSyncInterval(SYNC_INTERVALS.BACKGROUND);
     }
     
-    // Note: For a real app, we would also check battery level here
-    // and use SYNC_INTERVALS.LOW_BATTERY if battery is low
   }, [checkConnectivity]);
 
   /**
@@ -121,13 +125,11 @@ export function useNoteSync(notes, setNotes, serverUrl) {
     }
     
     if (value === true) {
-      // Set to true immediately
       setIsSyncing(true);
     } else {
-      // Delay setting to false to prevent flickering
       isSyncingTimeoutRef.current = setTimeout(() => {
         setIsSyncing(false);
-      }, 500);
+      }, SYNC_IS_SYNCING_CLEAR_DELAY_MS);
     }
   }, []);
 
@@ -143,12 +145,10 @@ export function useNoteSync(notes, setNotes, serverUrl) {
     
     // Prevent multiple simultaneous syncs using the ref
     if (isSyncingRef.current) return;
+    if (!force && !haveNotesChanged()) return;
     
     // Set the ref to true to prevent other sync attempts
     isSyncingRef.current = true;
-    
-    // Only sync if notes have changed or forced
-    if (!force && !haveNotesChanged()) return;
     
     setIsSyncingDebounced(true);
     setSyncError(null);
@@ -207,7 +207,7 @@ export function useNoteSync(notes, setNotes, serverUrl) {
     if (syncTimeoutRef.current) clearTimeout(syncTimeoutRef.current);
     syncTimeoutRef.current = setTimeout(() => {
       syncNotes(false, notesToSync);
-    }, 1000);
+    }, SYNC_DEBOUNCE_MS);
   }, [syncNotes]);
 
   // Set up app state change listener
@@ -253,7 +253,7 @@ export function useNoteSync(notes, setNotes, serverUrl) {
       // Exponential backoff for retries
       const retryDelay = Math.min(
         SYNC_INTERVALS.OFFLINE * Math.pow(SYNC_RETRY.BACKOFF_FACTOR, retryCount),
-        300000 // Max 5 minutes
+        300_000 // Max 5 minutes
       );
       
       // Offline retry doesn't need to be logged

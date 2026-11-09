@@ -2,8 +2,9 @@
   "expo": {
     "name": "arcanist",
     "slug": "arcanist",
+    "scheme": "arcanist",
     "version": "1.0.0",
-    "orientation": "portrait",
+    "orientation": "default",
     "icon": "./assets/images/arcanist_icon.png",
     "userInterfaceStyle": "light",
     "newArchEnabled": true,
@@ -25,7 +26,8 @@
       "package": "com.asoze.arcanist"
     },
     "web": {
-      "favicon": "./assets/images/favicon.png"
+      "favicon": "./assets/images/favicon.png",
+      "bundler": "metro"
     },
     "extra": {
       "eas": {

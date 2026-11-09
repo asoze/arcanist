@@ -37,3 +37,11 @@ yarn-error.*
 *.tsbuildinfo
 
 .idea/*
+android
+ios
+ios
+
+# Generated
+coverage/
+builds/
+*.apk

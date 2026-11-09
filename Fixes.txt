@@ -1,0 +1,39 @@
+xxx __React Component Architecture & Performance:__
+xxx - Memoize heavy components and callbacks (especially in NoteList and NoteEditor)
+xxx - Split large components like NoteApp.js into smaller, focused components
+xxx - Fix conflicting state management in NoteEditor.js
+xxx - Optimize FlatList performance with getItemLayout
+xxx - Centralize theme usage to avoid multiple useColorScheme() calls
+
+__Code Structure & Readability:__
+xxx - Break down complex components (NoteApp.js is 300+ lines with multiple responsibilities)
+xxx - Standardize styling patterns (currently mixing inline styles, StyleSheet, and hardcoded values. Use StyleSheet wherever is possibl)
+xxx - Organize imports consistently across files
+xxx - Remove unused code and imports
+
+__React Native Best Practices:__
+
+- Add accessibility props (accessibilityLabel, accessibilityRole, etc.)
+- Improve touch targets for better usability
+- Implement proper cleanup for timeout refs and async operations
+- Add platform-specific optimizations using Platform.select()
+
+__Code Elegance & Maintainability:__
+
+- Reduce prop drilling (NoteList receives 15+ props)
+- Implement consistent error handling patterns
+- Add PropTypes or TypeScript for better type safety
+- Extract complex logic into utility functions
+
+__Performance Optimizations:__
+
+xx - Split large context objects to prevent unnecessary re-renders
+xx - Implement proper debouncing for auto-save functionality
+xx - Memoize computed values in contexts
+xx - Remove disabled/commented code
+
+__CSS/Styling Improvements:__
+
+- Centralize shared styles and utilize the existing theme system consistently
+- Implement responsive design considerations
+- Use theme spacing values instead of hardcoded numbers

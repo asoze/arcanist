@@ -1,16 +1,16 @@
-import React from "react";
-import { View, Text, Button, StyleSheet, ScrollView, PanResponder, Animated } from "react-native";
-import { stringToColor } from "../utils/stringToColor";
-import Markdown from "react-native-markdown-display";
+import React from 'react';
+import { View, Text, StyleSheet, ScrollView, PanResponder, Animated } from 'react-native';
+import Markdown from 'react-native-markdown-display';
 
-export default function NoteViewer({ note, onEdit, onBack, isDark }) {
-    if (!note) return null;
+import { useThemeContext as useTheme } from '../store/ThemeContext';
+import { stringToColor } from 'arcanist-common';
+import { Button } from './common/Button';
 
-    const styles = createStyles(isDark);
-    
-    // Gesture handling for swipe-to-go-back using PanResponder
+export default function NoteViewer({ note, onEdit, onBack }) {
+    const { isDark, theme } = useTheme();
+    const styles = createStyles(theme);
     const translateX = React.useRef(new Animated.Value(0)).current;
-    
+
     const panResponder = React.useRef(
         PanResponder.create({
             onMoveShouldSetPanResponder: (evt, gestureState) => {
@@ -38,6 +38,8 @@ export default function NoteViewer({ note, onEdit, onBack, isDark }) {
         })
     ).current;
 
+    if (!note) return null;
+
     return (
         <Animated.View 
             style={[styles.container, { transform: [{ translateX }] }]}
@@ -46,7 +48,7 @@ export default function NoteViewer({ note, onEdit, onBack, isDark }) {
                 <Text style={styles.title}>{note.title || "Untitled Note"}</Text>
 
                 <ScrollView style={styles.content}>
-                    <Markdown style={markdownStyles(isDark)}>
+                    <Markdown style={markdownStyles(theme)}>
                         {note.content?.text || note.text}
                     </Markdown>
                     {note.tags?.length > 0 && (
@@ -65,92 +67,92 @@ export default function NoteViewer({ note, onEdit, onBack, isDark }) {
 
                 <View style={styles.buttons}>
                     <Button title="Edit" onPress={onEdit} />
-                    <View style={styles.spacer} />
-                    <Button title="Back" onPress={onBack} color="#999" />
+                    <Button title="Back" onPress={onBack} variant="secondary" />
                 </View>
         </Animated.View>
     );
 }
 
-const createStyles = (isDark) =>
+const createStyles = (theme) =>
     StyleSheet.create({
         container: {
             flex: 1,
-            padding: 20,
-            backgroundColor: isDark ? "#2b2b2b" : "#ffffff",
+            padding: theme.spacing.lg,
+            backgroundColor: theme.colors.background,
         },
         title: {
             fontSize: 22,
             fontWeight: "bold",
-            marginBottom: 16,
-            color: isDark ? "#eee" : "#000",
+            marginBottom: theme.spacing.md,
+            color: theme.colors.text,
         },
         content: {
             flex: 1,
-            marginBottom: 20,
+            marginBottom: theme.spacing.lg,
         },
         noteText: {
             fontSize: 16,
-            color: isDark ? "#ccc" : "#333",
+            color: theme.colors.text,
         },
         tags: {
-            marginTop: 16,
+            marginTop: theme.spacing.md,
         },
         tagsLabel: {
             fontWeight: "bold",
-            color: isDark ? "#bbb" : "#444",
+            color: theme.colors.text,
         },
         tagContainer: {
             flexDirection: "row",
             flexWrap: "wrap",
-            gap: 6,
-            marginTop: 8,
+            gap: theme.spacing.xs + 2,
+            marginTop: theme.spacing.sm,
         },
         tagBadge: {
-            paddingHorizontal: 8,
-            paddingVertical: 4,
-            borderRadius: 12,
+            paddingHorizontal: theme.spacing.sm,
+            paddingVertical: theme.spacing.xs,
+            borderRadius: theme.roundness + 4,
         },
         tagText: {
             fontSize: 12,
-            color: isDark ? "#eee" : "#333",
+            color: '#fff',
         },
         buttons: {
             flexDirection: "row",
             justifyContent: "flex-end",
-            marginTop: 10,
+            marginTop: theme.spacing.sm + 2,
+            gap: theme.spacing.sm + 2,
         },
         spacer: {
-            width: 10,
+            width: theme.spacing.sm + 2,
         },
     });
 
-const markdownStyles = (isDark) => ({
+const markdownStyles = (theme) => ({
     body: {
         fontSize: 16,
-        color: isDark ? "#eee" : "#333",
+        color: theme.colors.text,
     },
     heading1: { 
         fontSize: 24, 
-        marginBottom: 8,
-        color: isDark ? "#eee" : "#000",
+        marginBottom: theme.spacing.sm,
+        color: theme.colors.text,
     },
     heading2: { 
         fontSize: 20, 
-        marginBottom: 6,
-        color: isDark ? "#eee" : "#000",
+        marginBottom: theme.spacing.xs + 2,
+        color: theme.colors.text,
     },
     heading3: { 
-        color: isDark ? "#eee" : "#000",
+        color: theme.colors.text,
     },
     heading4: { 
-        color: isDark ? "#eee" : "#000",
+        color: theme.colors.text,
     },
     heading5: { 
-        color: isDark ? "#eee" : "#000",
+        color: theme.colors.text,
     },
     heading6: { 
-        color: isDark ? "#eee" : "#000",
+        color: theme.colors.text,
     },
-    link: { color: isDark ? "#66aaff" : "#3366cc" },
+    link: { color: theme.colors.primary },
 });

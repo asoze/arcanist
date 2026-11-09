@@ -18,6 +18,13 @@ module.exports = {
     '\\.(jpg|jpeg|png|gif|eot|otf|webp|svg|ttf|woff|woff2|mp4|webm|wav|mp3|m4a|aac|oga)$':
       '<rootDir>/__mocks__/fileMock.js',
     '\\.(css|less)$': '<rootDir>/__mocks__/styleMock.js',
+    '^arcanist-common$': '<rootDir>/../arcanist-common/index.js',
+    '^arcanist-common/(.*)$': '<rootDir>/../arcanist-common/$1',
   },
+  // arcanist-common lives outside the project root, so when babel-jest
+  // transforms its files the inserted `@babel/runtime/...` requires resolve
+  // starting from the arcanist-common folder (which has no node_modules).
+  // Add the client's node_modules as a fallback resolver path.
+  modulePaths: ['<rootDir>/node_modules'],
   testEnvironment: 'jsdom',
 };

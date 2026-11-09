@@ -1,5 +1,6 @@
 // logger.js
 const errorLog = [];
+const MAX_LOG_SIZE = 200;
 
 // Log levels: 0 = none, 1 = error only, 2 = warning+error, 3 = info+warning+error, 4 = all
 let LOG_LEVEL = 3; // Default to info level
@@ -63,6 +64,7 @@ export function logMessage(type = "info", ...parts) {
     const formatted = parts.map(formatValue).join(" ");
 
     // Persist full detail
+    if (errorLog.length >= MAX_LOG_SIZE) errorLog.shift();
     errorLog.push({
         type,
         parts,          // raw values as‑passed

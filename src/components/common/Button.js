@@ -1,7 +1,7 @@
 // src/components/common/Button.js
 import React from 'react';
 import { Pressable, Text, StyleSheet } from 'react-native';
-import { useTheme } from '../../hooks/useTheme';
+import { useThemeContext as useTheme } from '../../store/ThemeContext';
 
 /**
  * Reusable button component with consistent styling

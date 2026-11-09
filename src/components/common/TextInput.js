@@ -1,7 +1,7 @@
 // src/components/common/TextInput.js
 import React from 'react';
 import { TextInput as RNTextInput, StyleSheet, View, Text } from 'react-native';
-import { useTheme } from '../../hooks/useTheme';
+import { useThemeContext as useTheme } from '../../store/ThemeContext';
 
 /**
  * Reusable text input component with consistent styling

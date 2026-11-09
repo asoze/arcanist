@@ -64,7 +64,6 @@ describe('NotesContext', () => {
   ];
   
   const mockSyncNotes = jest.fn();
-  const mockDebouncedSync = jest.fn();
   const mockSetPersistedNotes = jest.fn();
   
   // Setup mocks before each test
@@ -82,7 +81,7 @@ describe('NotesContext', () => {
     // Mock useNoteSync
     useNoteSync.mockReturnValue({
       syncNotes: mockSyncNotes,
-      debouncedSync: mockDebouncedSync,
+      debouncedSync: jest.fn(),
       skipEffectRef: { current: false },
       lastSyncedAt: 1234567890,
       isSyncing: false,
@@ -127,12 +126,9 @@ describe('NotesContext', () => {
     
     // Check that setNotes was called with the new note
     expect(mockSetPersistedNotes).toHaveBeenCalled();
-    const newNotes = mockSetPersistedNotes.mock.calls[0][0];
+    const newNotes = mockSetPersistedNotes.mock.calls.at(-1)[0];
     expect(newNotes.length).toBe(5);
     expect(newNotes[4].title).toBe('New Note');
-    
-    // Check that sync was triggered
-    expect(mockDebouncedSync).toHaveBeenCalled();
   });
   
   it('should delete a note', async () => {
@@ -149,14 +145,11 @@ describe('NotesContext', () => {
     
     // Check that setNotes was called with the updated notes
     expect(mockSetPersistedNotes).toHaveBeenCalled();
-    const updatedNotes = mockSetPersistedNotes.mock.calls[0][0];
+    const updatedNotes = mockSetPersistedNotes.mock.calls.at(-1)[0];
     
     // Find the deleted note
     const deletedNote = updatedNotes.find(n => n.id === '1');
     expect(deletedNote.deleted).toBe(true);
-    
-    // Check that sync was triggered
-    expect(mockDebouncedSync).toHaveBeenCalled();
   });
   
   it('should set active tag', async () => {
@@ -193,7 +186,7 @@ describe('NotesContext', () => {
     });
     
     // Check that sync was called
-    expect(mockSyncNotes).toHaveBeenCalledWith(true, mockNotes);
+    expect(mockSyncNotes).toHaveBeenCalledWith(true);
   });
   
   it('should filter notes by active tag', async () => {

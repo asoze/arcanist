@@ -4,38 +4,50 @@ import { useColorScheme, Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { getTheme } from '../styles/theme';
 
-/**
- * Custom hook for theme management
- * @returns {Object} Theme state and functions
- */
+const THEME_KEY = 'themePreference';
+
 export function useTheme() {
   const [themeOverride, setThemeOverride] = useState(null);
+  const [hydrated, setHydrated] = useState(false);
   const systemScheme = useColorScheme();
-  // Force dark mode for testing
-  // const isDark = true;
-  
-  // Use system theme with fallback to device settings
-  const isDark = themeOverride === null 
-    ? (systemScheme === "dark" || (systemScheme === null && Platform.OS === 'android'))
-    : themeOverride === "dark";
-  
-  // Always use system theme by default
+
+  const isDark = themeOverride === null
+    ? (systemScheme === 'dark' || (systemScheme === null && Platform.OS === 'android'))
+    : themeOverride === 'dark';
+
   useEffect(() => {
-    // Clear any saved theme preference to ensure system theme is used
-    AsyncStorage.removeItem('themePreference')
-      .catch(err => console.error('Failed to clear theme preference:', err));
+    let active = true;
+    AsyncStorage.getItem(THEME_KEY)
+      .then((stored) => {
+        if (!active) return;
+        if (stored === 'dark' || stored === 'light') {
+          setThemeOverride(stored);
+        }
+      })
+      .catch((err) => console.error('Failed to load theme preference:', err))
+      .finally(() => {
+        if (active) setHydrated(true);
+      });
+    return () => {
+      active = false;
+    };
   }, []);
-  
-  // Save theme preference when changed
+
   const setThemePreference = (preference) => {
     setThemeOverride(preference);
-    AsyncStorage.setItem('themePreference', preference)
-      .catch(err => console.error('Failed to save theme preference:', err));
+    if (preference === null) {
+      AsyncStorage.removeItem(THEME_KEY)
+        .catch((err) => console.error('Failed to clear theme preference:', err));
+    } else {
+      AsyncStorage.setItem(THEME_KEY, preference)
+        .catch((err) => console.error('Failed to save theme preference:', err));
+    }
   };
-  
+
   return {
     isDark,
     themeOverride,
+    hydrated,
     setThemeOverride: setThemePreference,
     toggleTheme: () => setThemePreference(isDark ? 'light' : 'dark'),
     useSystemTheme: () => setThemePreference(null),

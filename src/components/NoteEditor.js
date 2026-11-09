@@ -1,18 +1,84 @@
-import React, { useState, useEffect, useRef } from "react";
-import { View, TextInput, Button, StyleSheet, Text, Switch, Platform, Pressable } from "react-native";
-import TagSuggestions from "./TagSuggestions";
-import Markdown from "react-native-markdown-display";
-import { useColorScheme } from "react-native";
-import { stringToColor } from "../utils/stringToColor";
-import { tagStyles } from "../styles/tagStyles";
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import { View, TextInput, StyleSheet, Text, Switch, Pressable, KeyboardAvoidingView, ScrollView, Platform } from 'react-native';
+
+import { useThemeContext as useTheme } from '../store/ThemeContext';
+import { useResponsiveLayout } from './common/ResponsiveContainer';
+import { stringToColor } from 'arcanist-common';
+import { createTagStyles } from '../styles/tagStyles';
+import { Button } from './common/Button';
+import TagSuggestions from './TagSuggestions';
+
+// Memoized formatting buttons component
+const FormattingButtons = React.memo(({ onApplyFormatting, theme }) => {
+  const formatButtons = useMemo(() => [
+    { symbol: "**", label: "B", title: "Bold" },
+    { symbol: "_", label: "I", title: "Italic" },
+    { symbol: "~~", label: "S", title: "Strikethrough" },
+    { symbol: "- ", label: "•", title: "List", isPrefix: true },
+  ], []);
+
+  const formatButtonStyle = useMemo(() => ({
+    backgroundColor: theme.colors.primary,
+    paddingVertical: theme.spacing.sm + 4,
+    paddingHorizontal: theme.spacing.md,
+    borderRadius: theme.roundness,
+    minWidth: 48,
+    minHeight: 48,
+    justifyContent: "center",
+    alignItems: "center",
+  }), [theme]);
+
+  return (
+    <View style={styles.formattingButtons}>
+      {formatButtons.map(({ symbol, label, title, isPrefix }) => (
+        <Pressable
+          key={symbol}
+          style={formatButtonStyle}
+          onPress={() => onApplyFormatting(symbol, isPrefix)}
+          accessibilityLabel={title}
+          accessibilityRole="button"
+        >
+          <Text style={styles.formatButtonText}>{label}</Text>
+        </Pressable>
+      ))}
+    </View>
+  );
+});
+
+// Memoized tag display component
+const TagDisplay = React.memo(({ tags, onRemoveTag, theme }) => {
+  const tagArray = useMemo(() => 
+    tags.split(",").map(tag => tag.trim()).filter(Boolean), 
+    [tags]
+  );
+
+  const tagStyles = useMemo(() => createTagStyles(theme), [theme]);
+
+  if (tagArray.length === 0) return null;
+
+  return (
+    <View style={tagStyles.tagContainer}>
+      {tagArray.map((tag) => (
+        <View key={tag} style={[tagStyles.tag, { backgroundColor: stringToColor(tag) }]}>
+          <Text style={tagStyles.tagText}>{tag}</Text>
+          <Pressable 
+            onPress={() => onRemoveTag(tag)}
+            accessibilityLabel={`Remove ${tag} tag`}
+            accessibilityRole="button"
+            style={styles.tagRemoveButton}
+          >
+            <Text style={styles.tagRemove}>×</Text>
+          </Pressable>
+        </View>
+      ))}
+    </View>
+  );
+});
 
 export default function NoteEditor({
   noteTitle: initialNoteTitle,
-  setNoteTitle,
   noteContent: initialNoteContent,
-  setNoteContent,
   tags: initialTags,
-  setTags,
   allTags,
   onAdd,
   onCancel,
@@ -24,234 +90,226 @@ export default function NoteEditor({
   disabled,
   saveSuccess,
 }) {
-  // Use local state to track changes
-  const [localTitle, setLocalTitle] = useState(initialNoteTitle);
-  const [localContent, setLocalContent] = useState(initialNoteContent);
-  const [localTags, setLocalTags] = useState(initialTags);
-  const [localIsGlobal, setLocalIsGlobal] = useState(originalNote?.isGlobal || false);
-  const scheme = useColorScheme();
-  const isDark = scheme === "dark";
-  const [preview, setPreview] = useState(false);
+  // Centralized theme usage
+  const { isDark, theme } = useTheme();
+  
+  // Simplified state management - only local state
+  const [title, setTitle] = useState(initialNoteTitle || '');
+  const [content, setContent] = useState(initialNoteContent || '');
+  const [tags, setTags] = useState(initialTags || '');
+  const [localIsGlobal, setLocalIsGlobal] = useState(
+    originalNote?.sharing?.isShared || originalNote?.isGlobal || originalNote?.username === 'All' || false
+  );
   const [selection, setSelection] = useState({ start: 0, end: 0 });
   
-  // Auto-save functionality
-  const autoSaveTimeoutRef = useRef(null);
-  const [isAutoSaving, setIsAutoSaving] = useState(false);
-  
-  // Calculate if there are changes (moved before useEffect to avoid temporal dead zone)
-  const hasChanges =
-    !editingId ||
-    localTitle !== originalNote?.title ||
-    localContent !== originalNote?.content?.text ||
-    localTags !== (originalNote?.tags || []).join(", ");
-  
-  // Auto-save effect - saves changes after 2 seconds of inactivity
+  // Initialize state when props change
   useEffect(() => {
-    // DISABLED: Auto-save functionality temporarily disabled
-    if (false && editingId && onSaveEdit && hasChanges) {
-      // Clear existing timeout
-      if (autoSaveTimeoutRef.current) {
-        clearTimeout(autoSaveTimeoutRef.current);
-      }
-      
-      // Set new timeout for auto-save
-      autoSaveTimeoutRef.current = setTimeout(() => {
-        setIsAutoSaving(true);
-        onSaveEdit(editingId, {
-          title: localTitle,
-          content: { text: localContent },
-          tags: localTags
-            .split(",")
-            .map((t) => t.trim())
-            .filter(Boolean),
-          isGlobal: localIsGlobal,
-        });
-        setTimeout(() => setIsAutoSaving(false), 1000); // Show saving indicator for 1 second
-      }, 2000); // Auto-save after 2 seconds of inactivity
-    }
-    
-    // Cleanup timeout on unmount
-    return () => {
-      if (autoSaveTimeoutRef.current) {
-        clearTimeout(autoSaveTimeoutRef.current);
-      }
-    };
-  }, [localTitle, localContent, localTags, localIsGlobal, editingId, onSaveEdit, hasChanges]);
+    setTitle(initialNoteTitle || '');
+    setContent(initialNoteContent || '');
+    setTags(initialTags || '');
+    setLocalIsGlobal(
+      originalNote?.sharing?.isShared || originalNote?.isGlobal || originalNote?.username === 'All' || false
+    );
+  }, [initialNoteTitle, initialNoteContent, initialTags, originalNote?.sharing?.isShared, originalNote?.isGlobal, originalNote?.username]);
+  
+  // Calculate if there are changes
+  const hasChanges = useMemo(() => {
+    if (!editingId) return true; // New note always has changes
+    const originalIsGlobal = originalNote?.sharing?.isShared || originalNote?.isGlobal || originalNote?.username === 'All' || false;
+    return (
+      title !== (originalNote?.title || '') ||
+      content !== (originalNote?.content?.text || '') ||
+      tags !== ((originalNote?.tags || []).join(", ")) ||
+      localIsGlobal !== originalIsGlobal
+    );
+  }, [title, content, tags, localIsGlobal, editingId, originalNote]);
 
-  const applyFormatting = (symbol) => {
+  // Memoized formatting function
+  const applyFormatting = useCallback((symbol, isPrefix = false) => {
     const start = selection.start;
     const end = selection.end;
-    const selectedText = localContent.slice(start, end);
+    const selectedText = content.slice(start, end);
 
-    const newText =
-      localContent.slice(0, start) +
-      symbol + selectedText + symbol +
-      localContent.slice(end);
+    let newText;
+    let newSelection;
 
-    setLocalContent(newText);
+    if (isPrefix) {
+      // For list items, add prefix at the beginning of the line
+      const before = content.slice(0, start);
+      const after = content.slice(end);
+      newText = before + symbol + selectedText + after;
+      const offset = symbol.length;
+      newSelection = {
+        start: start + offset,
+        end: end + offset,
+      };
+    } else {
+      // For formatting symbols, wrap the selected text
+      newText = content.slice(0, start) + symbol + selectedText + symbol + content.slice(end);
+      const offset = symbol.length;
+      newSelection = {
+        start: start + offset,
+        end: end + selectedText.length + offset,
+      };
+    }
 
-    // Update selection to sit after inserted symbols
-    const offset = symbol.length;
-    setSelection({
-      start: start + offset,
-      end: end + selectedText.length + offset,
-    });
-  };
+    setContent(newText);
+    setSelection(newSelection);
+  }, [content, selection]);
+
+  // Memoized tag removal function
+  const handleRemoveTag = useCallback((tagToRemove) => {
+    const updatedTags = tags
+      .split(",")
+      .map(t => t.trim())
+      .filter(t => t && t !== tagToRemove)
+      .join(", ");
+    setTags(updatedTags);
+  }, [tags]);
+
+  // Memoized save function
+  const handleSave = useCallback(() => {
+    const noteData = {
+      title,
+      content: { text: content },
+      tags: tags.split(",").map(t => t.trim()).filter(Boolean),
+      isGlobal: localIsGlobal,
+    };
+
+    if (editingId && onSaveEdit) {
+      onSaveEdit(editingId, noteData);
+    } else if (onAdd) {
+      onAdd(noteData);
+    }
+  }, [title, content, tags, localIsGlobal, editingId, onSaveEdit, onAdd]);
+
+  // Memoized styles
+  const inputStyles = useMemo(() => ({
+    color: theme.colors.text,
+    borderColor: theme.colors.border,
+    backgroundColor: isDark ? theme.colors.surface : '#fff',
+  }), [theme.colors.text, theme.colors.border, theme.colors.surface, isDark]);
 
   return (
-    <View>
-      <View style={styles.switchRow}>
-        <Text style={{ fontSize: 16, color: isDark ? "#eee" : "#333", marginRight: 10 }}>
-          Share with all users
-        </Text>
-        <Switch
-          value={localIsGlobal}
-          onValueChange={setLocalIsGlobal}
-          trackColor={{ false: "#767577", true: "#81b0ff" }}
-          thumbColor={localIsGlobal ? "#00aa00" : "#ccc"}
+    <KeyboardAvoidingView 
+      style={styles.keyboardAvoidingView}
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      keyboardVerticalOffset={Platform.OS === 'ios' ? 100 : 0}
+    >
+      <ScrollView 
+        style={styles.scrollView}
+        contentContainerStyle={styles.scrollContent}
+        keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
+      >
+        <View style={styles.switchRow}>
+          <Text style={[styles.switchLabel, { color: theme.colors.text }]}>
+            Share with all users
+          </Text>
+          <Switch
+            value={localIsGlobal}
+            onValueChange={setLocalIsGlobal}
+            trackColor={{ false: theme.colors.border, true: theme.colors.primary }}
+            thumbColor={localIsGlobal ? theme.colors.success : theme.colors.subtext}
+          />
+        </View>
+        
+        {saveSuccess && (
+          <Text style={[styles.successText, { color: theme.colors.success }]}>
+            ✅ Saved!
+          </Text>
+        )}
+        
+        <TextInput
+          style={[styles.input, inputStyles]}
+          placeholder="Note title"
+          placeholderTextColor={theme.colors.subtext}
+          value={title}
+          onChangeText={setTitle}
+          editable={!disabled}
+          selectTextOnFocus={disabled}
         />
-      </View>
-      {saveSuccess && (
-        <Text style={{ color: "#00aa00", marginBottom: 10 }}>✅ Saved!</Text>
-      )}
-      {isAutoSaving && (
-        <Text style={{ color: "#007bff", marginBottom: 10 }}>💾 Auto-saving...</Text>
-      )}
-      <TextInput
-        style={styles.input(isDark)}
-        placeholder="Note title"
-        value={localTitle}
-        onChangeText={setLocalTitle}
-        editable={!disabled}
-        selectTextOnFocus={disabled}
-      />
-      
-      {/* Tag section - moved to top */}
-      <TextInput
-        style={styles.input(isDark)}
-        placeholder="Add tags (comma-separated)"
-        value={localTags}
-        onChangeText={setLocalTags}
-        editable={!disabled}
-        selectTextOnFocus={disabled}
-      />
-      <View style={{ flexDirection: "row", flexWrap: "wrap", marginBottom: 10 }}>
-        {localTags
-          .split(",")
-          .map((tag) => tag.trim())
-          .filter(Boolean)
-          .map((tag) => (
-            <View key={tag} style={[tagStyles.tag, { backgroundColor: stringToColor(tag), flexDirection: "row", alignItems: "center" }]}>
-              <Text style={{ color: "#fff", marginRight: 6 }}>
-                {tag}
-              </Text>
-              <Pressable onPress={() => {
-                const updatedTags = localTags
-                  .split(",")
-                  .map(t => t.trim())
-                  .filter(t => t && t !== tag)
-                  .join(", ");
-                setLocalTags(updatedTags);
-              }}>
-                <Text style={{ color: "#ccc", fontWeight: "bold" }}>
-                  ×
-                </Text>
-              </Pressable>
-            </View>
-          ))}
-      </View>
-      <TagSuggestions input={localTags} setInput={setLocalTags} allTags={allTags} />
-      
-      <View style={styles.formattingButtons}>
-        <Pressable style={styles.formatButton} onPress={() => applyFormatting("**")}>
-          <Text style={styles.formatButtonText}>B</Text>
-        </Pressable>
-        <Pressable style={styles.formatButton} onPress={() => applyFormatting("_")}>
-          <Text style={styles.formatButtonText}>I</Text>
-        </Pressable>
-        <Pressable style={styles.formatButton} onPress={() => applyFormatting("~~")}>
-          <Text style={styles.formatButtonText}>S</Text>
-        </Pressable>
-        <Pressable style={styles.formatButton} onPress={() => {
-          const prefix = "- ";
-          const start = selection.start;
-          const end = selection.end;
-          const before = localContent.slice(0, start);
-          const after = localContent.slice(end);
-          const selected = localContent.slice(start, end);
-
-          const newText =
-            before +
-            prefix +
-            selected +
-            after;
-
-          setLocalContent(newText);
-          const offset = prefix.length;
-          setSelection({
-            start: start + offset,
-            end: end + offset,
-          });
-        }}>
-          <Text style={styles.formatButtonText}>•</Text>
-        </Pressable>
-      </View>
-      <TextInput
-        style={styles.input(isDark)}
-        placeholder="Write a note..."
-        value={localContent}
-        onChangeText={setLocalContent}
-        multiline
-        editable={!disabled}
-        numberOfLines={12}
-        textAlignVertical="top"
-        selectTextOnFocus={disabled}
-        onSelectionChange={(e) => setSelection(e.nativeEvent.selection)}
-      />
-      <View style={styles.buttonRow}>
-        <Button
-          title={editingId ? "Save Note" : "Add Note"}
-          onPress={
-            editingId && onSaveEdit
-              ? () => onSaveEdit(editingId, {
-                  title: localTitle,
-                  content: { text: localContent },
-                  tags: localTags
-                    .split(",")
-                    .map((t) => t.trim())
-                    .filter(Boolean),
-                  isGlobal: localIsGlobal,
-                })
-              : onAdd
-          }
-          disabled={!hasChanges || disabled}
+        
+        <TextInput
+          style={[styles.input, inputStyles]}
+          placeholder="Add tags (comma-separated)"
+          placeholderTextColor={theme.colors.subtext}
+          value={tags}
+          onChangeText={setTags}
+          editable={!disabled}
+          selectTextOnFocus={disabled}
         />
-        {onCancel && <Button title="Cancel" onPress={onCancel} />}
-      </View>
-    </View>
+        
+        <TagDisplay tags={tags} onRemoveTag={handleRemoveTag} theme={theme} />
+        <TagSuggestions input={tags} setInput={setTags} allTags={allTags} />
+        
+        <FormattingButtons onApplyFormatting={applyFormatting} theme={theme} />
+        
+        <TextInput
+          style={[styles.input, styles.contentInput, inputStyles]}
+          placeholder="Write a note..."
+          placeholderTextColor={theme.colors.subtext}
+          value={content}
+          onChangeText={setContent}
+          multiline
+          editable={!disabled}
+          numberOfLines={12}
+          textAlignVertical="top"
+          selectTextOnFocus={disabled}
+          onSelectionChange={(e) => setSelection(e.nativeEvent.selection)}
+        />
+        
+        <View style={styles.buttonRow}>
+          <Button
+            title={editingId ? "Save Note" : "Add Note"}
+            onPress={handleSave}
+            disabled={!hasChanges || disabled}
+          />
+          {onCancel && <Button title="Cancel" onPress={onCancel} />}
+        </View>
+      </ScrollView>
+    </KeyboardAvoidingView>
   );
 }
 
 const styles = StyleSheet.create({
-  input: (isDark) => ({
+  keyboardAvoidingView: {
+    flex: 1,
+  },
+  scrollView: {
+    flex: 1,
+  },
+  scrollContent: {
+    flexGrow: 1,
+    padding: 16,
+  },
+  input: {
     borderWidth: 1,
-    borderColor: isDark ? "#555" : "#ccc",
-    backgroundColor: isDark ? "#333" : "#fff",
-    color: isDark ? "#eee" : "#000",
     padding: 10,
     marginBottom: 10,
     borderRadius: 6,
-  }),
+  },
+  contentInput: {
+    minHeight: 200,
+  },
   buttonRow: {
     flexDirection: "row",
     justifyContent: "flex-end",
     width: "65%",
     alignSelf: "flex-end",
     gap: 10,
+    marginTop: 10,
   },
   switchRow: {
     flexDirection: "row",
     alignItems: "center",
+    marginBottom: 10,
+  },
+  switchLabel: {
+    fontSize: 16,
+    marginRight: 10,
+  },
+  successText: {
     marginBottom: 10,
   },
   formattingButtons: {
@@ -259,29 +317,25 @@ const styles = StyleSheet.create({
     marginBottom: 10,
     gap: 8,
   },
-  formatButton: {
-    backgroundColor: "#007bff",
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-    borderRadius: 8,
-    minWidth: 48,
-    minHeight: 48,
-    justifyContent: "center",
-    alignItems: "center",
-  },
   formatButtonText: {
     color: "#fff",
     fontSize: 16,
     fontWeight: "bold",
   },
-});
-
-const markdownStyles = {
-  body: {
-    color: "#333",
-    fontSize: 14,
+  tagsContainer: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    marginBottom: 10,
   },
-  heading1: { fontSize: 24, marginBottom: 8 },
-  heading2: { fontSize: 20, marginBottom: 6 },
-  link: { color: "#3366cc" },
-};
+  tagText: {
+    color: "#fff",
+    marginRight: 6,
+  },
+  tagRemove: {
+    color: "#ccc",
+    fontWeight: "bold",
+  },
+  tagRemoveButton: {
+    marginLeft: 4,
+  },
+});

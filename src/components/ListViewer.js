@@ -1,8 +1,10 @@
-import React from "react";
-import { View, Text, FlatList, Button, useColorScheme, PanResponder, Animated } from "react-native";
-import { tagStyles } from "../styles/tagStyles";
-import { stringToColor } from "../utils/stringToColor";
-import { Checkbox } from "react-native-paper";
+import React from 'react';
+import { View, Text, FlatList, PanResponder, Animated, StyleSheet } from 'react-native';
+import { Checkbox } from 'react-native-paper';
+
+import { useThemeContext as useTheme } from '../store/ThemeContext';
+import { stringToColor } from 'arcanist-common';
+import { Button } from './common/Button';
 
 /**
  * ListViewer displays a checklist that can be checked off without entering edit mode.
@@ -13,8 +15,8 @@ import { Checkbox } from "react-native-paper";
  *   - onToggleItem: callback(itemId) to toggle checked status
  */
 export default function ListViewer({ note, onEdit, onBack, onToggleItem }) {
-  const isDark = useColorScheme() === "dark";
-  const textColor = { color: isDark ? "#fff" : "#000" };
+  const { theme } = useTheme();
+  const styles = createStyles(theme);
   
   // Gesture handling for swipe-to-go-back using PanResponder
   const translateX = React.useRef(new Animated.Value(0)).current;
@@ -48,10 +50,10 @@ export default function ListViewer({ note, onEdit, onBack, onToggleItem }) {
 
   return (
     <Animated.View 
-      style={[{ padding: 16 }, { transform: [{ translateX }] }]}
+      style={[styles.container, { transform: [{ translateX }] }]}
       {...panResponder.panHandlers}
     >
-      <Text style={{ fontSize: 24, fontWeight: "bold", marginBottom: 16, ...textColor }}>
+      <Text style={styles.title}>
         {note.title}
       </Text>
 
@@ -59,18 +61,16 @@ export default function ListViewer({ note, onEdit, onBack, onToggleItem }) {
         data={note.items}
         keyExtractor={item => item.id}
         renderItem={({ item }) => (
-          <View style={{ flexDirection: "row", alignItems: "center", marginBottom: 6 }}>
+          <View style={styles.listItem}>
             <Checkbox
               status={item.checked ? "checked" : "unchecked"}
               onPress={() => onToggleItem && onToggleItem(item.id)}
             />
             <Text
-              style={{
-                fontSize: 16,
-                marginLeft: 8,
-                ...textColor,
-                textDecorationLine: item.checked ? "line-through" : "none",
-              }}
+              style={[
+                styles.itemText,
+                item.checked && styles.checkedText
+              ]}
             >
               {item.text}
             </Text>
@@ -79,17 +79,12 @@ export default function ListViewer({ note, onEdit, onBack, onToggleItem }) {
       />
 
       {note.tags && note.tags.length > 0 && (
-        <View style={{ marginTop: 16 }}>
-          <Text style={{ fontWeight: "bold", color: isDark ? "#bbb" : "#444" }}>Tags:</Text>
-          <View style={{ flexDirection: "row", flexWrap: "wrap", gap: 6, marginTop: 8 }}>
+        <View style={styles.tagsSection}>
+          <Text style={styles.tagsLabel}>Tags:</Text>
+          <View style={styles.tagsContainer}>
             {note.tags.map((tag, index) => (
-              <View key={index} style={{ 
-                paddingHorizontal: 8, 
-                paddingVertical: 4, 
-                borderRadius: 12, 
-                backgroundColor: stringToColor(tag) 
-              }}>
-                <Text style={{ fontSize: 12, color: isDark ? "#eee" : "#333" }}>
+              <View key={index} style={[styles.tagBadge, { backgroundColor: stringToColor(tag) }]}>
+                <Text style={styles.tagText}>
                   {tag}
                 </Text>
               </View>
@@ -98,14 +93,66 @@ export default function ListViewer({ note, onEdit, onBack, onToggleItem }) {
         </View>
       )}
 
-      <View style={{ marginTop: 24, flexDirection: "row", justifyContent: "flex-end" }}>
-        <View style={{ marginRight: 8 }}>
-          <Button title="Edit" onPress={onEdit} />
-        </View>
-        <View>
-          <Button title="Back" onPress={onBack} color="gray" />
-        </View>
+      <View style={styles.buttonContainer}>
+        <Button title="Edit" onPress={onEdit} />
+        <Button title="Back" onPress={onBack} variant="secondary" />
       </View>
     </Animated.View>
   );
 }
+
+const createStyles = (theme) => StyleSheet.create({
+  container: {
+    flex: 1,
+    padding: theme.spacing.md,
+    backgroundColor: theme.colors.background,
+  },
+  title: {
+    fontSize: 24,
+    fontWeight: "bold",
+    marginBottom: theme.spacing.md,
+    color: theme.colors.text,
+  },
+  listItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: theme.spacing.xs + 2,
+  },
+  itemText: {
+    fontSize: 16,
+    marginLeft: theme.spacing.sm,
+    color: theme.colors.text,
+  },
+  checkedText: {
+    textDecorationLine: "line-through",
+    color: theme.colors.subtext,
+  },
+  tagsSection: {
+    marginTop: theme.spacing.md,
+  },
+  tagsLabel: {
+    fontWeight: "bold",
+    color: theme.colors.text,
+  },
+  tagsContainer: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    gap: theme.spacing.xs + 2,
+    marginTop: theme.spacing.sm,
+  },
+  tagBadge: {
+    paddingHorizontal: theme.spacing.sm,
+    paddingVertical: theme.spacing.xs,
+    borderRadius: theme.roundness + 4,
+  },
+  tagText: {
+    fontSize: 12,
+    color: '#fff',
+  },
+  buttonContainer: {
+    marginTop: theme.spacing.lg,
+    flexDirection: "row",
+    justifyContent: "flex-end",
+    gap: theme.spacing.sm,
+  },
+});

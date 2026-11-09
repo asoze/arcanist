@@ -1,7 +1,7 @@
 // src/components/common/Modal.js
 import React from 'react';
-import { View, StyleSheet, Modal as RNModal, Pressable } from 'react-native';
-import { useTheme } from '../../hooks/useTheme';
+import { View, StyleSheet, Modal as RNModal, Pressable, TouchableWithoutFeedback } from 'react-native';
+import { useThemeContext as useTheme } from '../../store/ThemeContext';
 
 /**
  * Reusable modal component with consistent styling
@@ -28,23 +28,29 @@ export function Modal({
       transparent
       animationType="fade"
       onRequestClose={onClose}
+      supportedOrientations={['portrait', 'landscape']}
     >
-      <Pressable 
-        style={styles.overlay} 
-        onPress={onClose}
-      >
-        <Pressable 
-          style={[
-            styles.content,
-            { backgroundColor: theme.colors.surface },
-            fullScreen && styles.fullScreen,
-            style
-          ]}
-          onPress={e => e.stopPropagation()}
-        >
+      {fullScreen ? (
+        <View style={[styles.fullScreenContainer, { backgroundColor: theme.colors.surface }]}>
           {children}
-        </Pressable>
-      </Pressable>
+        </View>
+      ) : (
+        <TouchableWithoutFeedback onPress={onClose}>
+          <View style={styles.overlay}>
+            <TouchableWithoutFeedback onPress={() => {}}>
+              <View 
+                style={[
+                  styles.content,
+                  { backgroundColor: theme.colors.surface },
+                  style
+                ]}
+              >
+                {children}
+              </View>
+            </TouchableWithoutFeedback>
+          </View>
+        </TouchableWithoutFeedback>
+      )}
     </RNModal>
   );
 }
@@ -66,10 +72,10 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.25,
     shadowRadius: 3.84,
   },
-  fullScreen: {
+  fullScreenContainer: {
+    flex: 1,
     width: '100%',
     height: '100%',
-    borderRadius: 0,
   },
 });
 

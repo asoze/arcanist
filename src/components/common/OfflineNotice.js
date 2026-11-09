@@ -1,9 +1,7 @@
 // src/components/common/OfflineNotice.js
 import React from 'react';
-import { View, Text, StyleSheet, Animated, Dimensions } from 'react-native';
+import { Text, StyleSheet, Animated } from 'react-native';
 import { useNotes } from '../../store/NotesContext';
-
-const { width } = Dimensions.get('window');
 
 /**
  * Component to display an offline notice when the device is offline
@@ -63,7 +61,6 @@ const styles = StyleSheet.create({
     padding: 10,
     alignItems: 'center',
     justifyContent: 'center',
-    width,
     zIndex: 10,
   },
   text: {

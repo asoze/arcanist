@@ -3,6 +3,11 @@ import '@testing-library/jest-native/extend-expect';
 import { NativeModules } from 'react-native';
 import mockAsyncStorage from '@react-native-async-storage/async-storage/jest/async-storage-mock';
 
+// RN Animated / InteractionManager use setImmediate in Jest
+if (typeof global.setImmediate === 'undefined') {
+  global.setImmediate = (cb, ...args) => global.setTimeout(() => cb(...args), 0);
+}
+
 // Mock AsyncStorage
 jest.mock('@react-native-async-storage/async-storage', () => mockAsyncStorage);
 

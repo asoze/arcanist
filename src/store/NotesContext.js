@@ -1,33 +1,33 @@
-// src/store/NotesContext.js
-import React, { createContext, useContext, useReducer, useEffect, useRef } from 'react';
+import React, { createContext, useContext, useReducer, useEffect, useMemo, useCallback } from 'react';
+import PropTypes from 'prop-types';
 import { usePersistedNotes } from '../hooks/usePersistedNotes';
 import { useNoteSync } from '../hooks/useNoteSync';
 
-// Initial state
 const initialState = {
   notes: [],
   activeTag: null,
-  viewingId: null,
-  editingId: null,
-  isAdding: false,
-  isGlobal: false,
   loading: true,
   error: null,
+  lastSyncedAt: 0,
+  isSyncing: false,
+  syncError: null,
+  isOffline: false,
+  migrationComplete: false,
 };
 
-// Action types
 const ActionTypes = {
   SET_NOTES: 'SET_NOTES',
   ADD_NOTE: 'ADD_NOTE',
   UPDATE_NOTE: 'UPDATE_NOTE',
   DELETE_NOTE: 'DELETE_NOTE',
   SET_ACTIVE_TAG: 'SET_ACTIVE_TAG',
-  SET_VIEWING_ID: 'SET_VIEWING_ID',
-  SET_EDITING_ID: 'SET_EDITING_ID',
-  SET_IS_ADDING: 'SET_IS_ADDING',
-  SET_IS_GLOBAL: 'SET_IS_GLOBAL',
   SET_LOADING: 'SET_LOADING',
   SET_ERROR: 'SET_ERROR',
+  SET_LAST_SYNCED_AT: 'SET_LAST_SYNCED_AT',
+  SET_IS_SYNCING: 'SET_IS_SYNCING',
+  SET_SYNC_ERROR: 'SET_SYNC_ERROR',
+  SET_IS_OFFLINE: 'SET_IS_OFFLINE',
+  SET_MIGRATION_COMPLETE: 'SET_MIGRATION_COMPLETE',
 };
 
 // Reducer function
@@ -53,18 +53,20 @@ function notesReducer(state, action) {
       };
     case ActionTypes.SET_ACTIVE_TAG:
       return { ...state, activeTag: action.payload };
-    case ActionTypes.SET_VIEWING_ID:
-      return { ...state, viewingId: action.payload, editingId: null, isAdding: false };
-    case ActionTypes.SET_EDITING_ID:
-      return { ...state, editingId: action.payload, viewingId: null, isAdding: true };
-    case ActionTypes.SET_IS_ADDING:
-      return { ...state, isAdding: action.payload };
-    case ActionTypes.SET_IS_GLOBAL:
-      return { ...state, isGlobal: action.payload };
     case ActionTypes.SET_LOADING:
       return { ...state, loading: action.payload };
     case ActionTypes.SET_ERROR:
       return { ...state, error: action.payload };
+    case ActionTypes.SET_LAST_SYNCED_AT:
+      return { ...state, lastSyncedAt: action.payload };
+    case ActionTypes.SET_IS_SYNCING:
+      return { ...state, isSyncing: action.payload };
+    case ActionTypes.SET_SYNC_ERROR:
+      return { ...state, syncError: action.payload };
+    case ActionTypes.SET_IS_OFFLINE:
+      return { ...state, isOffline: action.payload };
+    case ActionTypes.SET_MIGRATION_COMPLETE:
+      return { ...state, migrationComplete: action.payload };
     default:
       return state;
   }
@@ -74,158 +76,206 @@ function notesReducer(state, action) {
 const NotesContext = createContext();
 
 /**
- * Provider component for notes state
- * @param {Object} props - Component props
- * @param {React.ReactNode} props.children - Child components
- * @param {string} props.serverUrl - Server URL for synchronization
- * @param {string} props.username - Current username
- * @returns {React.ReactNode}
+ * Provider component for notes context
  */
 export function NotesProvider({ children, serverUrl, username }) {
   const [state, dispatch] = useReducer(notesReducer, initialState);
   
-  // Use persisted notes hook
-  const { 
-    notes: persistedNotes, 
-    setNotes: setPersistedNotes, 
-    loading, 
-    error 
-  } = usePersistedNotes('notes', []);
+  // Keep a ref to the current state for actions that need immediate access
+  const stateRef = React.useRef(state);
+  stateRef.current = state;
   
-  // Use note sync hook
-  const { 
-    syncNotes, 
-    debouncedSync, 
-    skipEffectRef, 
-    lastSyncedAt,
-    isSyncing,
-    syncError,
-    isOffline
+  // Use persisted notes hook
+  const { notes: persistedNotes, setNotes: saveNotes, loading: persistedLoading } = usePersistedNotes(username);
+  
+  // Migration function to update old note format to new format
+  const migrateNotes = useCallback((notes) => {
+    if (!username) return notes; // Don't migrate if no username
+    
+    return notes.map(note => {
+      // Skip if already migrated (has new structure)
+      if (note.sharing && typeof note.sharing === 'object') {
+        return note;
+      }
+      
+      // Determine original creator and sharing status
+      let createdBy = username;
+      let isShared = false;
+      
+      if (note.username === 'All') {
+        // This was a shared note, try to preserve original creator
+        // For now, we'll use the current username as creator
+        // In a real migration, you might have historical data
+        createdBy = username;
+        isShared = true;
+      } else if (note.username) {
+        createdBy = note.username;
+        isShared = note.isGlobal || false;
+      }
+      
+      // Create migrated note with new structure
+      return {
+        ...note,
+        // New fields
+        createdBy,
+        createdAt: note.createdAt || note.updatedAt || Date.now(),
+        lastModifiedBy: createdBy, // Initially same as creator
+        lastModifiedOn: note.updatedAt || Date.now(),
+        sharing: {
+          isShared
+        },
+        // Keep legacy fields during transition
+        username: note.username,
+        isGlobal: note.isGlobal,
+        updatedAt: note.updatedAt
+      };
+    });
+  }, [username]);
+  
+  const {
+    syncNotes: syncWithServer,
+    debouncedSync,
+    lastSyncedAt: syncLastSyncedAt,
+    isSyncing: syncIsSyncing,
+    syncError: syncSyncError,
+    isOffline: syncIsOffline
   } = useNoteSync(state.notes, (notes) => {
-    setPersistedNotes(notes);
     dispatch({ type: ActionTypes.SET_NOTES, payload: notes });
+    saveNotes(notes);
   }, serverUrl);
   
-  // Update state when persisted notes change
+  // Load notes from persisted storage and migrate if needed
   useEffect(() => {
-    dispatch({ type: ActionTypes.SET_NOTES, payload: persistedNotes });
-    dispatch({ type: ActionTypes.SET_LOADING, payload: loading });
-    dispatch({ type: ActionTypes.SET_ERROR, payload: error || syncError });
-  }, [persistedNotes, loading, error, syncError]);
-  
-  // Track last notes update time to prevent too frequent syncs
-  const lastNotesUpdateRef = useRef(0);
-  
-  // Sync notes when they change, but not too frequently
-  useEffect(() => {
-    if (!skipEffectRef?.current && state.notes.length > 0 && !loading) {
-      const now = Date.now();
-      // Only sync if it's been at least 30 seconds since the last update
-      if (now - lastNotesUpdateRef.current > 30000) {
-        debouncedSync(state.notes);
-        lastNotesUpdateRef.current = now;
+    if (!persistedLoading && username) {
+      const notes = persistedNotes || [];
+      const migratedNotes = migrateNotes(notes);
+      
+      // Save migrated notes if migration occurred
+      if (JSON.stringify(notes) !== JSON.stringify(migratedNotes)) {
+        saveNotes(migratedNotes);
       }
+      
+      dispatch({ type: ActionTypes.SET_NOTES, payload: migratedNotes });
+      dispatch({ type: ActionTypes.SET_MIGRATION_COMPLETE, payload: true });
+      dispatch({ type: ActionTypes.SET_LOADING, payload: false });
     }
-  }, [state.notes, debouncedSync, skipEffectRef, loading]);
+  }, [persistedNotes, persistedLoading, migrateNotes, saveNotes, username]);
   
-  // Actions
-  const actions = {
+  const actions = useMemo(() => ({
     setNotes: (notes) => {
       dispatch({ type: ActionTypes.SET_NOTES, payload: notes });
+      saveNotes(notes);
+      debouncedSync(notes);
     },
-    
+
     addNote: (note) => {
+      if (!username) return null;
+
+      const now = Date.now();
       const newNote = {
         ...note,
-        id: note.id || Date.now().toString(),
-        updatedAt: Date.now(),
-        username: state.isGlobal ? 'All' : username,
+        id: note.id || now.toString(),
+        createdBy: username,
+        createdAt: now,
+        lastModifiedBy: username,
+        lastModifiedOn: now,
+        sharing: {
+          isShared: note.isGlobal || false
+        },
+        updatedAt: now,
+        username: note.isGlobal ? 'All' : username,
+        isGlobal: note.isGlobal || false,
       };
       dispatch({ type: ActionTypes.ADD_NOTE, payload: newNote });
+      const updatedNotes = [...stateRef.current.notes, newNote];
+      saveNotes(updatedNotes);
+      debouncedSync(updatedNotes);
       return newNote;
     },
-    
+
     updateNote: (id, updates) => {
+      if (!username) return null;
+
+      const now = Date.now();
       const updatedNote = {
         id,
         ...updates,
-        updatedAt: Date.now(),
+        lastModifiedBy: username,
+        lastModifiedOn: now,
+        sharing: {
+          isShared: updates.isGlobal || false
+        },
+        updatedAt: now,
         username: updates.isGlobal ? 'All' : username,
+        isGlobal: updates.isGlobal || false,
       };
       dispatch({ type: ActionTypes.UPDATE_NOTE, payload: updatedNote });
+      const updatedNotes = stateRef.current.notes.map(note =>
+        note.id === id ? { ...note, ...updatedNote } : note
+      );
+      saveNotes(updatedNotes);
+      debouncedSync(updatedNotes);
       return updatedNote;
     },
-    
+
     deleteNote: (id) => {
       dispatch({ type: ActionTypes.DELETE_NOTE, payload: id });
-    },
-    
-    setActiveTag: (tag) => {
-      dispatch({ type: ActionTypes.SET_ACTIVE_TAG, payload: tag });
-    },
-    
-    viewNote: (id) => {
-      dispatch({ type: ActionTypes.SET_VIEWING_ID, payload: id });
-    },
-    
-    editNote: (id) => {
-      dispatch({ type: ActionTypes.SET_EDITING_ID, payload: id });
-    },
-    
-    startAddNote: () => {
-      dispatch({ type: ActionTypes.SET_EDITING_ID, payload: null });
-      dispatch({ type: ActionTypes.SET_IS_ADDING, payload: true });
-    },
-    
-    cancelEdit: () => {
-      dispatch({ type: ActionTypes.SET_EDITING_ID, payload: null });
-      dispatch({ type: ActionTypes.SET_IS_ADDING, payload: false });
-    },
-    
-    setIsGlobal: (isGlobal) => {
-      dispatch({ type: ActionTypes.SET_IS_GLOBAL, payload: isGlobal });
-    },
-    
-    syncWithServer: (force = false) => {
-      syncNotes(force, state.notes);
-    },
-  };
-  
-  // Computed values
-  const visibleNotes = state.activeTag
-    ? state.notes.filter(
-        n => 
-          n.tags?.includes(state.activeTag) && 
-          !n.deleted && 
-          (n.username === username || n.username === 'All')
-      )
-    : state.notes.filter(
-        n => 
-          !n.deleted && 
-          (n.username === username || n.username === 'All')
+      const updatedNotes = stateRef.current.notes.map(note =>
+        note.id === id ? { ...note, deleted: true, updatedAt: Date.now() } : note
       );
+      saveNotes(updatedNotes);
+      debouncedSync(updatedNotes);
+    },
+
+    setActiveTag: (tag) => dispatch({ type: ActionTypes.SET_ACTIVE_TAG, payload: tag }),
+
+    syncWithServer: (force = false) => syncWithServer(force),
+  }), [username, saveNotes, syncWithServer, debouncedSync]);
   
-  const allTags = Array.from(
-    new Set(state.notes.flatMap(note => note.tags || []))
-  ).sort();
-  
-  const currentNote = state.viewingId 
-    ? state.notes.find(n => n.id === state.viewingId)
-    : state.editingId
-      ? state.notes.find(n => n.id === state.editingId)
-      : null;
+  const computedValues = useMemo(() => {
+    const visibleNotes = state.notes.filter(n => {
+      if (n.deleted) return false;
+      if (!username) return false;
+      
+      if (n.sharing && typeof n.sharing === 'object') {
+        return (n.createdBy === username) || n.sharing.isShared;
+      }
+      
+      return (n.username === username) || (n.username === 'All');
+    });
+    
+    const filteredNotes = state.activeTag 
+      ? visibleNotes.filter(n => n.tags?.includes(state.activeTag))
+      : visibleNotes;
+    
+    const tagSet = new Set();
+    for (const note of state.notes) {
+      if (note.tags && Array.isArray(note.tags)) {
+        for (const tag of note.tags) {
+          if (tag && typeof tag === 'string') {
+            tagSet.add(tag.trim());
+          }
+        }
+      }
+    }
+    const allTags = Array.from(tagSet).sort();
+    
+    return {
+      visibleNotes: filteredNotes,
+      allTags,
+    };
+  }, [state.notes, state.activeTag, username]);
   
   // Context value
-  const value = {
+  const value = useMemo(() => ({
     ...state,
-    visibleNotes,
-    allTags,
-    currentNote,
-    lastSyncedAt,
-    isSyncing,
-    isOffline,
+    lastSyncedAt: syncLastSyncedAt || state.lastSyncedAt,
+    isSyncing: syncIsSyncing || state.isSyncing,
+    syncError: syncSyncError || state.syncError,
+    isOffline: syncIsOffline || state.isOffline,
+    ...computedValues,
     actions,
-  };
+  }), [state, computedValues, actions, syncLastSyncedAt, syncIsSyncing, syncSyncError, syncIsOffline]);
   
   return (
     <NotesContext.Provider value={value}>
@@ -234,9 +284,19 @@ export function NotesProvider({ children, serverUrl, username }) {
   );
 }
 
+NotesProvider.propTypes = {
+  children: PropTypes.node.isRequired,
+  serverUrl: PropTypes.string,
+  username: PropTypes.string,
+};
+
+NotesProvider.defaultProps = {
+  serverUrl: null,
+  username: null,
+};
+
 /**
  * Hook to use notes context
- * @returns {Object} Notes context value
  */
 export function useNotes() {
   const context = useContext(NotesContext);

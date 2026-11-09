@@ -17,6 +17,12 @@ export function usePersistedNotes(key, initialValue = []) {
   // Load notes from AsyncStorage on mount
   useEffect(() => {
     const loadNotes = async () => {
+      // Guard against null/undefined keys
+      if (!key) {
+        setLoading(false);
+        return;
+      }
+      
       try {
         const storedValue = await AsyncStorage.getItem(key);
         // Don't log normal operations
@@ -45,6 +51,9 @@ export function usePersistedNotes(key, initialValue = []) {
   const setNotes = useCallback((newNotes) => {
     setNotesState(newNotes);
     
+    // Guard against null/undefined keys
+    if (!key) return;
+    
     // Persist to AsyncStorage
     AsyncStorage.setItem(key, JSON.stringify(newNotes))
       .then(() => {/* Don't log normal operations */})
@@ -54,6 +63,9 @@ export function usePersistedNotes(key, initialValue = []) {
   // Clear all notes
   const clearNotes = useCallback(() => {
     setNotesState(initialValue);
+    
+    // Guard against null/undefined keys
+    if (!key) return;
     
     AsyncStorage.removeItem(key)
       .then(() => {/* Don't log normal operations */})
