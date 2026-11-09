@@ -15,6 +15,7 @@ import {
 
 import { useNotes } from '../../src/notes/NotesContext';
 import { isBlankNote } from '../../src/notes/preview';
+import { TagEditor } from '../../src/notes/Tags';
 import { confirm } from '../../src/confirm';
 import { useColors } from '../../src/theme';
 
@@ -23,16 +24,12 @@ const BODY_CSS = `
   .ProseMirror { padding: 4px 2px 48px; font-size: 17px; line-height: 1.5; }
 `;
 
-function parseTags(text) {
-  return [...new Set(text.split(',').map((tag) => tag.trim()).filter(Boolean))];
-}
-
 function NoteEditor({ note, isNew }) {
   const navigation = useNavigation();
   const { isDark, colors } = useColors();
   const { updateNote, deleteNote } = useNotes();
   const [title, setTitle] = useState(note.title);
-  const [tagsText, setTagsText] = useState(note.tags.join(', '));
+  const [tags, setTags] = useState(note.tags);
   const [shared, setShared] = useState(note.shared);
   const [initialHtml] = useState(note.html);
   const deleting = useRef(false);
@@ -58,8 +55,8 @@ function NoteEditor({ note, isNew }) {
     if (!isFirstRead) updateNote(note.id, { html });
   }, [html, note.id, updateNote]);
 
-  const latest = useRef({ title, tagsText });
-  latest.current = { title, tagsText };
+  const latest = useRef({ title, tags });
+  latest.current = { title, tags };
 
   useEffect(() => {
     return navigation.addListener('beforeRemove', (event) => {
@@ -68,7 +65,7 @@ function NoteEditor({ note, isNew }) {
       const finish = (finalHtml) => {
         const final = {
           title: latest.current.title,
-          tags: parseTags(latest.current.tagsText),
+          tags: latest.current.tags,
           html: finalHtml ?? lastHtml.current ?? initialHtml,
         };
         if (isNew && isBlankNote(final)) {
@@ -99,9 +96,9 @@ function NoteEditor({ note, isNew }) {
     updateNote(note.id, { title: text });
   };
 
-  const onTagsChange = (text) => {
-    setTagsText(text);
-    updateNote(note.id, { tags: parseTags(text) });
+  const onTagsChange = (next) => {
+    setTags(next);
+    updateNote(note.id, { tags: next });
   };
 
   const onSharedChange = (value) => {
@@ -131,14 +128,7 @@ function NoteEditor({ note, isNew }) {
         style={[styles.title, { color: colors.text }]}
       />
       <View style={[styles.metaRow, { borderColor: colors.border }]}>
-        <TextInput
-          value={tagsText}
-          onChangeText={onTagsChange}
-          autoCapitalize="none"
-          placeholder="Tags, separated by commas"
-          placeholderTextColor={colors.muted}
-          style={[styles.tags, { color: colors.accent }]}
-        />
+        <TagEditor tags={tags} onChange={onTagsChange} colors={colors} />
         <Text style={[styles.sharedLabel, { color: colors.muted }]}>Shared</Text>
         <Switch
           value={shared}
@@ -190,7 +180,6 @@ const styles = StyleSheet.create({
     marginBottom: 8,
     borderBottomWidth: StyleSheet.hairlineWidth,
   },
-  tags: { flex: 1, fontSize: 15, paddingVertical: 6 },
   sharedLabel: { fontSize: 14 },
   byline: { fontSize: 13, marginBottom: 8 },
   headerButton: { paddingHorizontal: 8 },

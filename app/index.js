@@ -4,6 +4,7 @@ import { Stack, useRouter } from 'expo-router';
 
 import { useNotes } from '../src/notes/NotesContext';
 import { SyncStatus } from '../src/notes/SyncStatus';
+import { TagPills } from '../src/notes/Tags';
 import { htmlToPreview } from '../src/notes/preview';
 import { useSettings } from '../src/settings/SettingsContext';
 import { useColors } from '../src/theme';
@@ -144,11 +145,9 @@ export default function NoteList() {
               {htmlToPreview(item.html) || 'No content'}
             </Text>
             <View style={styles.rowFooter}>
-              {item.tags.length > 0 && (
-                <Text style={[styles.rowTags, { color: colors.accent }]} numberOfLines={1}>
-                  {item.tags.map((tag) => `#${tag}`).join('  ')}
-                </Text>
-              )}
+              <View style={styles.rowTags}>
+                <TagPills tags={item.tags} colors={colors} />
+              </View>
               {item.createdBy && item.createdBy !== settings.username ? (
                 <Text style={[styles.rowMeta, { color: colors.muted }]}>from {item.createdBy}</Text>
               ) : (
@@ -185,8 +184,8 @@ const styles = StyleSheet.create({
   rowTitle: { flex: 1, fontSize: 17, fontWeight: '600' },
   rowDate: { fontSize: 13 },
   rowPreview: { fontSize: 15, lineHeight: 20 },
-  rowFooter: { flexDirection: 'row', alignItems: 'baseline', gap: 12 },
-  rowTags: { flex: 1, fontSize: 13 },
+  rowFooter: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  rowTags: { flex: 1 },
   rowMeta: { marginLeft: 'auto', fontSize: 13 },
   welcome: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 32, gap: 12 },
   welcomeTitle: { fontSize: 24, fontWeight: '700' },

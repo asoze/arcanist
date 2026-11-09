@@ -9,6 +9,8 @@ export const palette = {
     border: '#e4e4e7',
     accent: '#2563eb',
     error: '#dc2626',
+    pill: '#dbeafe',
+    pillText: '#1e40af',
   },
   dark: {
     background: '#1c1c1e',
@@ -18,6 +20,8 @@ export const palette = {
     border: '#3f3f46',
     accent: '#3b82f6',
     error: '#f87171',
+    pill: '#1e3a5f',
+    pillText: '#bfdbfe',
   },
 };
 
