@@ -1,27 +1,25 @@
-// Metro configuration
-//
-// We share a sibling folder (`arcanist-common`) with the server. Metro by
-// default only resolves modules under the project root, so we explicitly:
-//   1. add `arcanist-common` to `watchFolders` so Metro tracks file changes there
-//   2. expose it via `extraNodeModules` so `import ... from 'arcanist-common'`
-//      resolves to that folder without needing a node_modules entry.
+const { getDefaultConfig } = require('expo/metro-config');
 
-const path = require('path');
-const { getDefaultConfig } = require('@expo/metro-config');
+/** @type {import('expo/metro-config').MetroConfig} */
+const config = getDefaultConfig(__dirname);
 
-const projectRoot = __dirname;
-const commonPath = path.resolve(projectRoot, '..', 'arcanist-common');
+// TenTap renders Tiptap inside a WebView; on web that WebView is shimmed with an iframe.
+const webAliases = {
+  'react-native': 'react-native-web',
+  'react-native-webview': '@10play/react-native-web-webview',
+  'react-native/Libraries/Utilities/codegenNativeComponent':
+    '@10play/react-native-web-webview/shim',
+  crypto: 'expo-crypto',
+};
 
-const config = getDefaultConfig(projectRoot);
-
-config.watchFolders = [...(config.watchFolders || []), commonPath];
-
-config.resolver = {
-  ...config.resolver,
-  extraNodeModules: {
-    ...(config.resolver?.extraNodeModules || {}),
-    'arcanist-common': commonPath,
-  },
+config.resolver.resolveRequest = (context, realModuleName, platform, moduleName) => {
+  if (platform === 'web') {
+    const alias = webAliases[realModuleName];
+    if (alias) {
+      return { filePath: require.resolve(alias), type: 'sourceFile' };
+    }
+  }
+  return context.resolveRequest(context, realModuleName, platform, moduleName);
 };
 
 module.exports = config;

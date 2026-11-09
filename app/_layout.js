@@ -1,54 +1,33 @@
-import React, { useEffect } from 'react';
-import { Platform } from 'react-native';
 import { Stack } from 'expo-router';
-import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
-import 'expo-system-ui';
-import { setLogLevel } from '../src/utils/logger';
+import { SafeAreaProvider } from 'react-native-safe-area-context';
 
-import { AppProvider } from '../src/components/providers/AppProvider';
-import { ErrorBoundary } from '../src/components/common/ErrorBoundary';
-import { useSettings } from '../src/store/SettingsContext';
-
-function StackLayout() {
-  const { isDark, theme } = useSettings();
-
-  return (
-    <>
-      <StatusBar style={isDark ? 'light' : 'dark'} />
-      <Stack
-        screenOptions={{
-          headerShown: false,
-          contentStyle: { backgroundColor: theme.colors.background },
-          animation: 'slide_from_right',
-        }}
-      >
-        <Stack.Screen name="index" />
-        <Stack.Screen
-          name="settings"
-          options={{ presentation: 'modal', animation: 'slide_from_bottom' }}
-        />
-        <Stack.Screen name="new" />
-        <Stack.Screen name="note/[id]/index" />
-        <Stack.Screen name="note/[id]/edit" />
-      </Stack>
-    </>
-  );
-}
+import { NotesProvider } from '../src/notes/NotesContext';
+import { SettingsProvider } from '../src/settings/SettingsContext';
+import { useColors } from '../src/theme';
 
 export default function RootLayout() {
-  useEffect(() => {
-    const logLevel = Platform.OS === 'android' ? 0 : 3;
-    setLogLevel(logLevel);
-  }, []);
-
+  const { colors } = useColors();
   return (
-    <ErrorBoundary>
-      <SafeAreaProvider>
-        <AppProvider>
-          <StackLayout />
-        </AppProvider>
-      </SafeAreaProvider>
-    </ErrorBoundary>
+    <SafeAreaProvider>
+      <SettingsProvider>
+        <NotesProvider>
+          <StatusBar style="auto" />
+          <Stack
+            screenOptions={{
+              headerStyle: { backgroundColor: colors.background },
+              headerTintColor: colors.accent,
+              headerTitleStyle: { color: colors.text },
+              headerShadowVisible: false,
+              contentStyle: { backgroundColor: colors.background },
+            }}
+          >
+            <Stack.Screen name="index" options={{ title: 'Notes' }} />
+            <Stack.Screen name="note/[id]" options={{ title: '' }} />
+            <Stack.Screen name="settings" options={{ title: 'Settings' }} />
+          </Stack>
+        </NotesProvider>
+      </SettingsProvider>
+    </SafeAreaProvider>
   );
 }

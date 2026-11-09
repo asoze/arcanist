@@ -1,121 +1,213 @@
-import React, { useEffect, useCallback } from 'react';
-import { View, Text, StyleSheet } from 'react-native';
-import { useRouter } from 'expo-router';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { useMemo, useState } from 'react';
+import { FlatList, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Stack, useRouter } from 'expo-router';
 
-import { useNotes } from '../src/store/NotesContext';
-import { useSettings } from '../src/store/SettingsContext';
-import { useModal } from '../src/hooks/useModal';
+import { useNotes } from '../src/notes/NotesContext';
+import { SyncStatus } from '../src/notes/SyncStatus';
+import { htmlToPreview } from '../src/notes/preview';
+import { useSettings } from '../src/settings/SettingsContext';
+import { useColors } from '../src/theme';
 
-import { Button } from '../src/components/common/Button';
-import { OfflineNotice } from '../src/components/common/OfflineNotice';
-import { ResponsiveContainer } from '../src/components/common/ResponsiveContainer';
-import { AppHeader } from '../src/components/AppHeader';
-import { FilterBanner } from '../src/components/FilterBanner';
-import { ActionButtons } from '../src/components/ActionButtons';
-import { SyncStatus } from '../src/components/SyncStatus';
-import { Modal } from '../src/components/common/Modal';
-import NoteList from '../src/components/NoteList';
+function formatUpdated(timestamp) {
+  const date = new Date(timestamp);
+  const sameDay = date.toDateString() === new Date().toDateString();
+  return sameDay
+    ? date.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })
+    : date.toLocaleDateString([], { month: 'short', day: 'numeric' });
+}
 
-import { UsernamePrompt } from '../src/components/UsernamePrompt';
+function TagChip({ label, active, onPress, colors }) {
+  return (
+    <Pressable
+      onPress={onPress}
+      accessibilityRole="button"
+      accessibilityState={{ selected: active }}
+      style={[
+        styles.tag,
+        { borderColor: active ? colors.accent : colors.border },
+        active && { backgroundColor: colors.accent },
+      ]}
+    >
+      <Text style={[styles.tagText, { color: active ? '#ffffff' : colors.muted }]}>{label}</Text>
+    </Pressable>
+  );
+}
 
-export default function HomeScreen() {
+function Welcome({ colors }) {
   const router = useRouter();
+  return (
+    <View style={styles.welcome}>
+      <Text style={[styles.welcomeTitle, { color: colors.text }]}>Welcome to Arcanist</Text>
+      <Text style={[styles.welcomeBody, { color: colors.muted }]}>
+        Pick a username, and add your server details to sync notes between devices.
+      </Text>
+      <Pressable
+        onPress={() => router.push('/settings')}
+        accessibilityRole="button"
+        style={[styles.welcomeButton, { backgroundColor: colors.accent }]}
+      >
+        <Text style={styles.welcomeButtonText}>Get started</Text>
+      </Pressable>
+    </View>
+  );
+}
 
-  const {
-    activeTag,
-    lastSyncedAt,
-    actions,
-  } = useNotes();
+export default function NoteList() {
+  const router = useRouter();
+  const { colors } = useColors();
+  const settings = useSettings();
+  const { notes, loaded, sync, createNote } = useNotes();
+  const [activeTag, setActiveTag] = useState(null);
+  const [refreshing, setRefreshing] = useState(false);
 
-  const { isDark, theme, username, serverUrl, isLoading } = useSettings();
+  const refresh = async () => {
+    setRefreshing(true);
+    await sync();
+    setRefreshing(false);
+  };
 
-  const usernameModal = useModal(false);
+  const allTags = useMemo(
+    () => [...new Set(notes.flatMap((note) => note.tags))].sort((a, b) => a.localeCompare(b)),
+    [notes]
+  );
 
-  useEffect(() => {
-    if (!isLoading && !username) {
-      usernameModal.show();
-    }
-  }, [isLoading, username]); // eslint-disable-line react-hooks/exhaustive-deps
+  const visibleNotes = useMemo(
+    () =>
+      notes
+        .filter((note) => !activeTag || note.tags.includes(activeTag))
+        .sort((a, b) => b.updatedAt - a.updatedAt),
+    [notes, activeTag]
+  );
 
-  const handleStartAddNote = useCallback((type = 'note') => {
-    router.push(`/new?type=${type}`);
-  }, [router]);
+  const openNew = () => {
+    const id = createNote();
+    router.push({ pathname: '/note/[id]', params: { id, isNew: '1' } });
+  };
 
-  const handleRefresh = useCallback(async () => {
-    await actions.syncWithServer(true);
-    return true;
-  }, [actions]);
+  const header = <Stack.Screen options={{ headerRight: () => <SyncStatus /> }} />;
 
-  const handleClearFilter = useCallback(() => {
-    actions.setActiveTag(null);
-  }, [actions]);
+  if (!settings.loaded || !loaded) return header;
+  if (!settings.username) {
+    return (
+      <>
+        {header}
+        <Welcome colors={colors} />
+      </>
+    );
+  }
 
   return (
-    <SafeAreaView style={{ flex: 1, backgroundColor: theme.colors.background }}>
-      <ResponsiveContainer>
-        <OfflineNotice />
-
-        {username ? (
-          <>
-            <AppHeader />
-
-            <FilterBanner
-              activeTag={activeTag}
-              onClearFilter={handleClearFilter}
+    <View style={[styles.screen, Platform.OS === 'web' && styles.screenWide]}>
+      {header}
+      {allTags.length > 0 && (
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          style={styles.tagBar}
+          contentContainerStyle={styles.tagBarContent}
+        >
+          <TagChip label="All" active={!activeTag} onPress={() => setActiveTag(null)} colors={colors} />
+          {allTags.map((tag) => (
+            <TagChip
+              key={tag}
+              label={tag}
+              active={activeTag === tag}
+              onPress={() => setActiveTag(activeTag === tag ? null : tag)}
+              colors={colors}
             />
+          ))}
+        </ScrollView>
+      )}
 
-            <View style={{ flex: 1 }}>
-              <ActionButtons
-                onAddNote={handleStartAddNote}
-                onAddList={handleStartAddNote}
-              />
-              <NoteList onRefresh={handleRefresh} />
+      <FlatList
+        data={visibleNotes}
+        keyExtractor={(note) => note.id}
+        contentContainerStyle={styles.list}
+        refreshing={refreshing}
+        onRefresh={refresh}
+        ItemSeparatorComponent={() => <View style={[styles.separator, { backgroundColor: colors.border }]} />}
+        ListEmptyComponent={
+          <Text style={[styles.empty, { color: colors.muted }]}>No notes yet. Tap + to start one.</Text>
+        }
+        renderItem={({ item }) => (
+          <Pressable
+            onPress={() => router.push({ pathname: '/note/[id]', params: { id: item.id } })}
+            style={({ pressed }) => [styles.row, pressed && { backgroundColor: colors.surface }]}
+          >
+            <View style={styles.rowHeader}>
+              <Text style={[styles.rowTitle, { color: colors.text }]} numberOfLines={1}>
+                {item.title || 'Untitled'}
+              </Text>
+              <Text style={[styles.rowDate, { color: colors.muted }]}>{formatUpdated(item.updatedAt)}</Text>
             </View>
-
-            <SyncStatus lastSyncedAt={lastSyncedAt} serverUrl={serverUrl} />
-          </>
-        ) : (
-          <View style={styles.welcomeContainer}>
-            <Text style={[styles.title, { color: theme.colors.text }]}>
-              Welcome to Arcanist!
+            <Text style={[styles.rowPreview, { color: colors.muted }]} numberOfLines={2}>
+              {htmlToPreview(item.html) || 'No content'}
             </Text>
-            <Text style={[styles.subtitle, { color: theme.colors.subtext }]}>
-              Please set up your username to get started.
-            </Text>
-            <Button
-              title="Set up username"
-              onPress={usernameModal.show}
-              style={styles.getStartedButton}
-            />
-          </View>
+            <View style={styles.rowFooter}>
+              {item.tags.length > 0 && (
+                <Text style={[styles.rowTags, { color: colors.accent }]} numberOfLines={1}>
+                  {item.tags.map((tag) => `#${tag}`).join('  ')}
+                </Text>
+              )}
+              {item.createdBy && item.createdBy !== settings.username ? (
+                <Text style={[styles.rowMeta, { color: colors.muted }]}>from {item.createdBy}</Text>
+              ) : (
+                item.shared && <Text style={[styles.rowMeta, { color: colors.muted }]}>Shared</Text>
+              )}
+            </View>
+          </Pressable>
         )}
+      />
 
-        <Modal visible={usernameModal.isVisible} onClose={() => {}}>
-          <UsernamePrompt onSave={usernameModal.hide} />
-        </Modal>
-      </ResponsiveContainer>
-    </SafeAreaView>
+      <Pressable
+        onPress={openNew}
+        accessibilityRole="button"
+        accessibilityLabel="New note"
+        style={[styles.fab, { backgroundColor: colors.accent }]}
+      >
+        <Text style={styles.fabText}>+</Text>
+      </Pressable>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
-  welcomeContainer: {
-    flex: 1,
-    justifyContent: 'center',
+  screen: { flex: 1 },
+  screenWide: { width: '100%', maxWidth: 760, alignSelf: 'center' },
+  tagBar: { flexGrow: 0 },
+  tagBarContent: { gap: 8, paddingHorizontal: 16, paddingVertical: 8 },
+  tag: { borderWidth: 1, borderRadius: 999, paddingHorizontal: 12, paddingVertical: 5 },
+  tagText: { fontSize: 14 },
+  list: { paddingBottom: 96 },
+  separator: { height: StyleSheet.hairlineWidth, marginHorizontal: 16 },
+  row: { paddingHorizontal: 16, paddingVertical: 12, gap: 4 },
+  rowHeader: { flexDirection: 'row', alignItems: 'baseline', gap: 12 },
+  rowTitle: { flex: 1, fontSize: 17, fontWeight: '600' },
+  rowDate: { fontSize: 13 },
+  rowPreview: { fontSize: 15, lineHeight: 20 },
+  rowFooter: { flexDirection: 'row', alignItems: 'baseline', gap: 12 },
+  rowTags: { flex: 1, fontSize: 13 },
+  rowMeta: { marginLeft: 'auto', fontSize: 13 },
+  welcome: { flex: 1, alignItems: 'center', justifyContent: 'center', padding: 32, gap: 12 },
+  welcomeTitle: { fontSize: 24, fontWeight: '700' },
+  welcomeBody: { fontSize: 16, lineHeight: 22, textAlign: 'center', maxWidth: 360 },
+  welcomeButton: { marginTop: 8, borderRadius: 999, paddingHorizontal: 24, paddingVertical: 12 },
+  welcomeButtonText: { color: '#ffffff', fontSize: 16, fontWeight: '600' },
+  empty: { textAlign: 'center', marginTop: 48, fontSize: 15 },
+  fab: {
+    position: 'absolute',
+    right: 20,
+    bottom: 28,
+    width: 56,
+    height: 56,
+    borderRadius: 28,
     alignItems: 'center',
+    justifyContent: 'center',
+    elevation: 4,
+    shadowColor: '#000',
+    shadowOpacity: 0.2,
+    shadowRadius: 6,
+    shadowOffset: { width: 0, height: 2 },
   },
-  title: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    textAlign: 'center',
-    marginBottom: 10,
-  },
-  subtitle: {
-    fontSize: 16,
-    textAlign: 'center',
-  },
-  getStartedButton: {
-    marginTop: 20,
-  },
+  fabText: { color: '#ffffff', fontSize: 30, lineHeight: 32 },
 });
